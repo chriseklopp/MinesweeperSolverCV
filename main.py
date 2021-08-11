@@ -22,4 +22,13 @@ import pyautogui
 import time
 
 
+import MInstanceManager
 
+
+if __name__ == "__main__":
+    time.sleep(3)
+    print("MineSweeper Bot V-0.1")
+    manager = MInstanceManager.MInstanceManager()
+    print("Initializaed Instances")
+    print(len(manager.instances), " Game Instances Detected")
+    cv2.waitKey(0)
