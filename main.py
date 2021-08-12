@@ -9,6 +9,7 @@ Fast and able to run repeatedly for many intervals
 
 Use monte carlo sims to predict probability of a mine in each square
 
+Expert Minesweeper grid is 30x16 WxH
 """
 
 
@@ -27,8 +28,10 @@ import MInstanceManager
 
 if __name__ == "__main__":
     time.sleep(3)
-    print("MineSweeper Bot V-0.1")
+    print("MineSweeper Bot V-0.5")
     manager = MInstanceManager.MInstanceManager()
     print("Initializaed Instances")
     print(len(manager.instances), " Game Instances Detected")
+    for i in range(0,10):
+        manager.update_all()
     cv2.waitKey(0)

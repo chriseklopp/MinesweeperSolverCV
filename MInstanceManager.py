@@ -19,6 +19,7 @@ import pyautogui
 import time
 
 import MInstance
+from MCoordinate import MCoordinate
 
 
 class MInstanceManager:
@@ -35,8 +36,8 @@ class MInstanceManager:
         self.valid_grid_locations = []
         self.valid_tile_dims = []
 
-        self._detect_windows()  # list of tuples of coordinates for each location
-        self._detect_grids()  # list of tuple pairs of win,grid coord
+        self._detect_windows()
+        self._detect_grids()
 
         for i, window_loc in enumerate(self.valid_window_locations):
             grid_loc = self.valid_grid_locations[i]
@@ -44,7 +45,7 @@ class MInstanceManager:
             new_instance = MInstance.MInstance((window_loc, grid_loc, tile_dims))
             self.instances.append(new_instance)
 
-
+            #DEBUG WILL BE REMOVED LATER
             print("------------------------------------------------------")
             print(window_loc)
             print("------------------------------------------------------")
@@ -53,32 +54,25 @@ class MInstanceManager:
             print(tile_dims[0], tile_dims[1])
             print("------------------------------------------------------")
 
-
     def update_all(self): # updates ALL instances.
         if self.instances:
             for instance in self.instances:
-                if not instance.is_complate():
-                    instance.update()
+                if not instance.is_complete:
+                    instance.update(self.screenshot)
 
         else:
             print("FAILED TO UPDATE. NO ACTIVE INSTANCES")
 
-    def reset_all(self): # resets ALL instances. This message is passed up the chain
+    def reset_all(self):  # resets ALL instances. This message is passed up the chain
         if self.instances:
             for instance in self.instances:
                 instance.reset()
 
     def _detect_windows(self):
-        # my_screenshot = pyautogui.screenshot() # takes and saves screenshot
-        # my_screenshot.save("images\sc.png")
-        # # my_screenshot.save("E:\PythonProjects\minesweeper_proj\sc.png")
-        # img = cv2.imread("images\sc.png")         # debug, display basic screenshot
-        # # cv2.imshow("Testerino",img)
-
+        # Detect potential windows on the screen
         img_gray = cv2.cvtColor(self.screenshot, cv2.COLOR_BGR2GRAY)         # set to grayscale
-        img_blurr = cv2.GaussianBlur(img_gray, (15, 15), 0)       # blurr
-        img_canny = cv2.Canny(img_blurr, 15, 255) # edge detect
-
+        img_blurr = cv2.GaussianBlur(img_gray, (15, 15), 0)       # blur
+        img_canny = cv2.Canny(img_blurr, 15, 255)  # edge detect
         contours, hierarchy = cv2.findContours(img_canny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         cv2.drawContours(self.screenshot, contours[3], -1, (0, 255, 0), 3)
 
@@ -89,25 +83,18 @@ class MInstanceManager:
                 peri = cv2.arcLength(cont, True)
                 approx = cv2.approxPolyDP(cont, .2 * peri, True)
 
-                low_window = approx[0][0]  # low and high contain coordinates to the minesweeper window
-                high_window = approx[1][0]
-                print(low_window)
-                print(high_window)
-                window = self.screenshot[low_window[1]:high_window[1], low_window[0]:high_window[0]]
-                self.potential_window_locations.append((low_window, high_window))
-        # crops to minesweeper window
-
-                cv2.imwrite(r"images\cropwindow.png", window)
+                lower_window_coords = MCoordinate(approx[0][0][0], approx[0][0][1])
+                upper_window_coords = MCoordinate(approx[1][0][0], approx[1][0][1])
+                self.potential_window_locations.append((lower_window_coords, upper_window_coords))
 
     def _detect_grids(self):
-        # A valid minesweeper grid must be detected in the window.
-        valid_grids_locations = []
         for window_location in self.potential_window_locations:
-            low_window, high_window = window_location
-        # for low_window, high_window in self.potential_window_locations:
-            window = self.screenshot[low_window[1]:high_window[1], low_window[0]:high_window[0]]
-            # get grid location within window
-            #img = cv2.imread(r"images\cropwindow.png")
+            lower_window_coords, upper_window_coords = window_location
+
+            window = self.screenshot[lower_window_coords.y:upper_window_coords.y,
+                                     lower_window_coords.x:upper_window_coords.x]
+
+            # Detect Grid Location within the window
             imgHSV = cv2.cvtColor(window, cv2.COLOR_BGR2HSV)
             imgGray = cv2.cvtColor(window, cv2.COLOR_BGR2GRAY)
             mask = cv2.inRange(imgHSV, np.array([0, 0, 120]), np.array([179, 254, 255]))
@@ -120,48 +107,38 @@ class MInstanceManager:
                     cv2.drawContours(window, cont, -1, (0, 255, 0), 1)
                     peri = cv2.arcLength(cont, True)
                     approx = cv2.approxPolyDP(cont, .2 * peri, True)
-                    # print(peri)
-                    # print(approx)
 
-            low_grid = approx[0][0]  # low and high contains coordinates to the play grid within window
-            high_grid = approx[1][0]  # each is list of [height,width] values
-            print(low_grid)
-            print(high_grid)
+            lower_grid_coords = MCoordinate(approx[0][0][0]+1, approx[0][0][1])  # +1 is for a line detection correction
+            upper_grid_coords = MCoordinate(approx[1][0][0], approx[1][0][1])
 
-            # crop window to grid
-            #window = self.screenshot[low_window[1]:high_window[1], low_window[0]:high_window[0]]
-            grid_crop = window[low_grid[1]:high_grid[1], low_grid[0] + 1:high_grid[0]]  # +1 is for a line detection correction.
+            # Calculate size of the tiles within the grid
+            grid_width = upper_grid_coords.x - lower_grid_coords.x
+            grid_height = upper_grid_coords.y - lower_grid_coords.y
 
-            grid_width = high_grid[0] - low_grid[0]  # width of grid
-            grid_height = high_grid[1] - low_grid[1]  # height of grid  # MINESWEEPER GRID IS 30 x 16 (w x h)
+            tile_width = round(grid_width / 30)
+            tile_height = round(grid_height / 16)
 
-            tile_width = int(grid_width / 30)
-            tile_height = int(grid_height / 16)
-            # print(grid_width, grid_height)
-            # print(tile_width, tile_height)
+            print(tile_width)
+            print(tile_height)
+
+            self.valid_window_locations.append((lower_window_coords, upper_window_coords))
+            self.valid_grid_locations.append((lower_grid_coords, upper_grid_coords))
+            self.valid_tile_dims.append((tile_width, tile_height))
+
+            #BELOW IS DEBUG AND WILL BE REMOVED
+            grid_crop = window[lower_grid_coords.y:upper_grid_coords.y,
+                               lower_grid_coords.x:upper_grid_coords.x]
 
             tile_test = grid_crop[tile_height * 0:tile_height * 1, tile_width * 0:tile_width * 1]
 
-            print(grid_crop)
-
-            # print(type(tile_test))
-            # print(tile_test)
-            # print(np.shape(tile_test))
-            # print(np.average(tile_test))
-            # tile_average = np.mean(tile_test)
-            # print(np.mean((np.mean(tile_test, axis=2))))
-
-            grid_BGR = cv2.cvtColor(window, cv2.COLOR_HSV2RGB)
-
-            cv2.imshow("grid_bgr", grid_BGR)
-            cv2.imshow("screenshot", self.screenshot)
-            cv2.imshow("grid", grid_crop)
-            cv2.imshow("tile", tile_test)
+            window_BGR = cv2.cvtColor(window, cv2.COLOR_HSV2RGB)
+            # cv2.imshow("window",window)
+            # cv2.imshow("window_bgr", window_BGR)
+            # cv2.imshow("screenshot", self.screenshot)
+            # cv2.imshow("grid", grid_crop)
+            # cv2.imshow("tile", tile_test)
             cv2.imwrite(r"images\masktest.png", grid_crop)
 
-            self.valid_window_locations.append((low_window, high_window))
-            self.valid_grid_locations.append((low_grid, high_grid))
-            self.valid_tile_dims.append((tile_width, tile_height))
 
 if __name__ == "__main__":
     time.sleep(3)
