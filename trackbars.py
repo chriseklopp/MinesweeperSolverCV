@@ -36,11 +36,12 @@ def hsvtrackbar(img_path):
         cv2.imshow("Mask",mask)
         cv2.imshow("Result",imgResult)
         if cv2.waitKey(1) &0xFF == ord('t'):
+            cv2.imwrite(r"images\mask.png", mask)
+            print(mask)
             return (mask)
 
         if cv2.waitKey(1) &0xFF == ord('q'):
             break
-
 
 def gbetrackbar(img):
     #greyscale,apply blurr, edge detect, dilate/erode.

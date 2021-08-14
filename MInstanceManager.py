@@ -51,7 +51,6 @@ class MInstanceManager:
             print("------------------------------------------------------")
             print(grid_loc)
             print("------------------------------------------------------")
-            print(tile_dims[0], tile_dims[1])
             print("------------------------------------------------------")
 
     def update_all(self): # updates ALL instances.
@@ -118,12 +117,14 @@ class MInstanceManager:
             tile_width = round(grid_width / 30)
             tile_height = round(grid_height / 16)
 
+            tile_length = max(tile_height, tile_width)  #  ensuring h and w are equal prevents drift from occuring
+
             print(tile_width)
             print(tile_height)
 
             self.valid_window_locations.append((lower_window_coords, upper_window_coords))
             self.valid_grid_locations.append((lower_grid_coords, upper_grid_coords))
-            self.valid_tile_dims.append((tile_width, tile_height))
+            self.valid_tile_dims.append(tile_length)
 
             #BELOW IS DEBUG AND WILL BE REMOVED
             grid_crop = window[lower_grid_coords.y:upper_grid_coords.y,
@@ -131,13 +132,13 @@ class MInstanceManager:
 
             tile_test = grid_crop[tile_height * 0:tile_height * 1, tile_width * 0:tile_width * 1]
 
-            window_BGR = cv2.cvtColor(window, cv2.COLOR_HSV2RGB)
+            # window_BGR = cv2.cvtColor(window, cv2.COLOR_HSV2RGB)
             # cv2.imshow("window",window)
-            # cv2.imshow("window_bgr", window_BGR)
+            # #cv2.imshow("window_bgr", window_BGR)
             # cv2.imshow("screenshot", self.screenshot)
             # cv2.imshow("grid", grid_crop)
             # cv2.imshow("tile", tile_test)
-            cv2.imwrite(r"images\masktest.png", grid_crop)
+            # cv2.imwrite(r"images\masktest.png", grid_crop)
 
 
 if __name__ == "__main__":

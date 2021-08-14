@@ -6,11 +6,8 @@ trackbars.hsvtrackbar(r"images\masktest.png")
 
 img = cv2.imread(r"E:\PythonProjects\minesweeper_proj\masktest.png")
 
-cv2.imshow("mask", img)
+# cv2.imshow("mask", img)
 cv2.waitKey(0)
-
-
-
 
 # [  0  77 188] [ 59 253 255] red flags mask
 # [  0 101 144] [ 37 255 202] 3,7,8 mask (3,7,8 are same color figure this out)

@@ -32,6 +32,7 @@ if __name__ == "__main__":
     manager = MInstanceManager.MInstanceManager()
     print("Initializaed Instances")
     print(len(manager.instances), " Game Instances Detected")
-    for i in range(0,10):
+    for i in range(0, 10):
         manager.update_all()
-    cv2.waitKey(0)
+    manager.reset_all()
+    #cv2.waitKey(0)
