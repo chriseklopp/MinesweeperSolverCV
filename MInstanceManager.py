@@ -46,12 +46,12 @@ class MInstanceManager:
             self.instances.append(new_instance)
 
             #DEBUG WILL BE REMOVED LATER
-            print("------------------------------------------------------")
-            print(window_loc)
-            print("------------------------------------------------------")
-            print(grid_loc)
-            print("------------------------------------------------------")
-            print("------------------------------------------------------")
+            # print("------------------------------------------------------")
+            # print(window_loc)
+            # print("------------------------------------------------------")
+            # print(grid_loc)
+            # print("------------------------------------------------------")
+            # print("------------------------------------------------------")
 
     def update_all(self): # updates ALL instances.
         if self.instances:
@@ -119,8 +119,8 @@ class MInstanceManager:
 
             tile_length = max(tile_height, tile_width)  #  ensuring h and w are equal prevents drift from occuring
 
-            print(tile_width)
-            print(tile_height)
+            # print(tile_width)
+            # print(tile_height)
 
             self.valid_window_locations.append((lower_window_coords, upper_window_coords))
             self.valid_grid_locations.append((lower_grid_coords, upper_grid_coords))
@@ -138,7 +138,7 @@ class MInstanceManager:
             # cv2.imshow("screenshot", self.screenshot)
             # cv2.imshow("grid", grid_crop)
             # cv2.imshow("tile", tile_test)
-            # cv2.imwrite(r"images\masktest.png", grid_crop)
+            cv2.imwrite(r"images\masktest.png", grid_crop)
 
 
 if __name__ == "__main__":
@@ -146,4 +146,5 @@ if __name__ == "__main__":
     print("Running from MInstanceManager")
     print("DEBUG PURPOSES ONLY")
     manager = MInstanceManager()
+    manager.update_all()
     cv2.waitKey(0)
