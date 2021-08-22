@@ -17,18 +17,18 @@ from MLogicPlugin import MLogicPlugin
 class MInstance:
     # flag must be last or 1 will (sometimes) overwrite it, this is a hacky solution but it should work fine
     # feature definiton value is tuple of (lower-hsv, upper-hsv, symmetry[TB,LR] )
-    feature_definitions = {'0': ([0, 0, 0], [255, 255, 255], [0, 0]),
-                           '1': ([95, 95, 162], [147, 255, 255], [0, 0]),  # 1 is still sometimes not being detected :(
+
+    feature_definitions = {'1': ([85, 66, 130], [117, 255, 255], [0, 0]),
                            '2': ([44, 162, 87], [66, 255, 158], [0, 0]),
                            '3': ([0, 101, 144], [37, 255, 202], [1, 0]),
                            '4': ([97, 232, 64], [161, 255, 217], [0, 0]),
-                           '5': ((0, 62, 107), (37, 255, 144), [0, 0]),
-                           '6': ((63, 175, 96), (101, 255, 188), [0, 0]),
-                           '7': ([0, 0, 0], [255, 255, 255], [0, 0]),
-                           '8': ([0, 0, 0], [255, 255, 255], [1, 1]),
+                           '5': ([0, 62, 107], [37, 255, 144], [0, 0]),
+                           '6': ([63, 175, 96], [101, 255, 188], [0, 0]),
+                           '8': ([0, 101, 144], [37, 255, 202], [1, 1]),
+                           '7': ([0, 101, 144], [37, 255, 202], [0, 0]),
                            '99': ([0, 77, 188], [59, 255, 255], [0, 0])
                            }
-            # need to add definition for 0.
+    # feature_definitions = {'1':  ([85, 66, 130], [117, 255, 255], [0, 0])}
     id = 0
 
     def __init__(self, location_tuple):
@@ -64,7 +64,7 @@ class MInstance:
         # self.cursor_control((5, 5), 'left')
 
     def reset(self):
-        print(self.grid_array)
+        # print(self.grid_array)
         # self.grid_array = np.empty([30, 16])
         # self.grid_array[:] = np.NaN
         self.flags = 0
@@ -81,10 +81,10 @@ class MInstance:
         x_target = lower_grid_real_location.x + cursor_offset_correction.x + self.tile_length * location[0]
         y_target = lower_grid_real_location.y + cursor_offset_correction.y + self.tile_length * location[1]
 
-        print("--------------------")
-        print(x_target)
-        print(y_target)
-        print("--------------------")
+        # print("--------------------")
+        # print(x_target)
+        # print(y_target)
+        # print("--------------------")
 
         pyautogui.moveTo(x_target, y_target, duration=0)
         pyautogui.click(button=action)
@@ -98,98 +98,172 @@ class MInstance:
                  lower_window_coords.x:upper_window_coords.x]
         grid_crop = window[lower_grid_coords.y:upper_grid_coords.y,
                     lower_grid_coords.x:upper_grid_coords.x]
+
+        x = grid_crop.shape
+        new_height = (x[0] + 16) - (x[0] % 16)
+        new_width = (x[1] + 30) - (x[1] % 30)
+
+        resized = cv2.resize(grid_crop, (new_width, new_height), interpolation=cv2.INTER_AREA)
+        tt = resized.shape
+
+        tile_height = round(new_height/16)
+        tile_width = round(new_width/30)
+        # tile_width = round(grid_width / 30)
+        # tile_height = round(grid_height / 16)
+        # tile_length = max(tile_height, tile_width)  # ensuring h and w are equal prevents drift from occuring
+
+        cv2.imshow("resizaed", resized)
+        cv2.imshow("gridcop", grid_crop)
+        # cv2.waitKey(0)
+
+        tile_row_list = []
+        for row in range(0, 16):
+            tile_list = []
+            for column in range(0, 30):
+                x_target = tile_width * (row+1)
+                y_target = tile_height * (column+1)
+                tile_crop = resized[row * tile_width:x_target, column * tile_height:y_target]
+                cv2.imshow("tile", tile_crop)
+                # cv2.waitKey(0)
+                match = False
+                for feature, values in MInstance.feature_definitions.items():
+                    match = self._detect_feature(values, tile_crop)
+                    if match:
+                        self.grid_array[column, row] = int(feature)
+                        break
+
+                if not match:
+                    # detecting 0 tiles requires an alternative method since contour detection fucks shit up fam.
+                    tile_hsv = cv2.cvtColor(tile_crop, cv2.COLOR_BGR2HSV)
+                    lower = np.array([58, 0, 0])
+                    upper = np.array([177, 62, 255])
+                    mask = cv2.inRange(tile_hsv, lower, upper)
+                    tile_blur = cv2.GaussianBlur(mask, (13, 13), 0)  # blur
+                    tile_bw = cv2.threshold(tile_blur, 50, 255, cv2.THRESH_BINARY)[1]
+                    tile_mean = tile_bw.mean()
+                    if tile_mean/255 > .95:
+                        self.grid_array[column, row] = int(0)
+                    else:
+                        self.grid_array[column, row] = np.NaN
+
+
+                # cv2.imshow("tile", tile_crop)
+                # cv2.waitKey(0)
+        #         tile_list.append(tile_crop)
+        #     tile_row_list.append(tile_list)
+        #
+        # tile_split_array = np.asarray(tile_row_list)
+
+
+
+
+
+
+
+
         snapshot_hsv = cv2.cvtColor(grid_crop, cv2.COLOR_BGR2HSV)
         # cv2.imwrite(r"images\masktest.png", grid_crop)                  #MASK DEBUGGING
         # detect locations of each feature, and insert into grid_array
-        for feature, values in MInstance.feature_definitions.items():
-            # print(feature, values)
-            feature_locations = self._detect_feature(values, snapshot_hsv)
-            for location in feature_locations:
-                array_x = math.floor(location.x / self.tile_length)
-                array_y = math.floor(location.y / self.tile_length)
-                self.grid_array[array_x, array_y] = int(feature)  # FLAGS ARE GETTING PLACED IN SLIGHTLY WRONG SPOTS
-            print(self.grid_array)
+
+
+        # x_target = lower_grid_real_location.x + cursor_offset_correction.x + self.tile_length * location[0]
+        # y_target = lower_grid_real_location.y + cursor_offset_correction.y + self.tile_length * location[1]
+
+
+
+
+        # for feature, values in MInstance.feature_definitions.items():
+        #     # print(feature, values)
+        #     feature_locations = self._detect_feature(values, snapshot_hsv)
+        #     for location in feature_locations:
+        #         array_x = math.floor(location.x / self.tile_length)
+        #         array_y = math.floor(location.y / self.tile_length)
+        #         self.grid_array[array_x, array_y] = int(feature)
+        #     print(self.grid_array)
 
     def _detect_window_popup(self,
                              screen_snapshot):  # this would occur on a won or lost game. Must differentiate between win / lose
-        print(screen_snapshot)
+        # print(screen_snapshot)
         return False
 
-    def _detect_feature(self, values, snapshot_hsv):
-
+    def _detect_feature(self, values, tile):
+        tile_hsv = cv2.cvtColor(tile, cv2.COLOR_BGR2HSV)
         lower = np.array(values[0])
         upper = np.array(values[1])
         symmetry = np.array(values[2])
-        mask = cv2.inRange(snapshot_hsv, lower, upper)
+        mask = cv2.inRange(tile_hsv, lower, upper)
 
         # snapshot_gray = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)  # set to grayscale
-        snapshot_blur = cv2.GaussianBlur(mask, (13, 13), 0)  # blur
-        snapshot_bw = cv2.threshold(snapshot_blur, 50, 255, cv2.THRESH_BINARY)[1]
-        snapshot_bw_inverted = cv2.bitwise_not(snapshot_bw)
+        tile_blur = cv2.GaussianBlur(mask, (13, 13), 0)  # blur
+        tile_bw = cv2.threshold(tile_blur, 50, 255, cv2.THRESH_BINARY)[1]
 
         # cv2.imshow("mask", mask)
-        # cv2.imshow("BW", snapshot_bw)
-        # cv2.imshow("blurr", snapshot_blur)
-        # cv2.imshow("inv", snapshot_bw_inverted)
+        # cv2.imshow("BW", tile_bw)
+        # cv2.imshow("blurr", tile_blur)
+        # cv2.imshow("tile", tile)
         # cv2.waitKey(0)
 
-        contours, hierarchy = cv2.findContours(snapshot_bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        detected_coordinates = []
+        contours, hierarchy = cv2.findContours(tile_bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         for cont in contours:
+
             area = cv2.contourArea(cont)
-            if 10 < area < self.tile_length ** 2:
+            peri = cv2.arcLength(cont, True)
+            approx = cv2.approxPolyDP(cont, .05 * peri, True)
+            cv2.drawContours(tile_hsv, [approx], -1, (0, 255, 0), 3)
+            if 10 < area < (self.tile_length ** 2)/2:
+
             # if 10 < area:  # TEMPORARY DEBUG SWITCH BACK TO ORIGINAL
                 moment = cv2.moments(cont)
                 avg_x = int(moment["m10"] / moment["m00"])
                 avg_y = int(moment["m01"] / moment["m00"])
 
                 if symmetry[0] or symmetry[1]:
-                    x, y, w, h = cv2.boundingRect(cont)
-                    # if x and y:
-                    tile_of_interest = snapshot_bw[y:y + h, x:x + w]
-                    nrow, ncol = tile_of_interest.shape
-                    # removes a row or col if total is odd, otherwise it will break
-                    if nrow % 2 != 0:
-                        tile_of_interest = tile_of_interest[:-1, :]
-                    if ncol % 2 != 0:
-                        tile_of_interest = tile_of_interest[:, :-1]
 
-                    top_bottom_symmetry = self._detect_symmetry(tile_of_interest, 1)
-                    left_right_symmetry = self._detect_symmetry(tile_of_interest, 0)
+                    x, y, w, h = cv2.boundingRect(cont)
+                    tile_feature_crop = tile_bw[y:y + h, x:x + w]
+                    cv2.drawContours(tile_hsv, [approx], -1, (0, 255, 0), 3)
+
+                    top_bottom_symmetry = self._detect_symmetry(tile_feature_crop, 1)
+                    left_right_symmetry = self._detect_symmetry(tile_feature_crop, 0)
 
                     # if only top-bottom symmetry required
                     if symmetry[0] and not symmetry[1]:
                         if top_bottom_symmetry > .75 and left_right_symmetry < .75:
-                            detected_coordinates.append(MCoordinate(avg_x, avg_y))
-                        continue
+                            # detected_coordinates.append(MCoordinate(avg_x, avg_y))
+                            return True
+                        else:
+                            return False
 
                     # if only left-right symmetry required
                     if symmetry[1] and not symmetry[0]:
                         if left_right_symmetry > .75 and top_bottom_symmetry < .75:
-                            detected_coordinates.append(MCoordinate(avg_x, avg_y))
-                        continue
+                            # detected_coordinates.append(MCoordinate(avg_x, avg_y))
+                            return True
+                        else:
+                            return False
 
                     # if both symmetry required
                     if symmetry[0] and symmetry[1]:
                         if left_right_symmetry > .75 and top_bottom_symmetry > .75:
-                            detected_coordinates.append(MCoordinate(avg_x, avg_y))
-                        continue
-
+                            # detected_coordinates.append(MCoordinate(avg_x, avg_y))
+                            return True
+                        else:
+                            return False
                 # cv2.drawContours(snapshot_hsv, cont, -1, (255, 255, 0), 2)
-                peri = cv2.arcLength(cont, True)
-                approx = cv2.approxPolyDP(cont, .05 * peri, True)
+
                 # cv2.drawContours(snapshot_hsv, [approx], -1, (255, 255, 0), 2)
                 # cv2.circle(snapshot_hsv, (avg_x, avg_y), radius=8, color=(255, 255, 0), thickness = -1)
-                detected_coordinates.append(MCoordinate(avg_x, avg_y))
+                return True
+                # detected_coordinates.append(MCoordinate(avg_x, avg_y))
 
-        # cv2.imshow("blah", snapshot_hsv)
-        # cv2.imshow("mask", mask)
-        # cv2.waitKey(0)
-
-        return detected_coordinates
+        return False
 
     @staticmethod
     def _detect_symmetry(tile_of_interest, is_vertical):
+
+        # cv2.imshow("tileofinterest", tile_of_interest)
+        # cv2.waitKey(0)
+
         nrow, ncol = tile_of_interest.shape
         # removes a row or col if total is odd, otherwise it will break
         if nrow % 2 != 0:
@@ -211,6 +285,11 @@ class MInstance:
             top_bottom_union = cv2.bitwise_or(tile_lowerhalf, tile_upperhalf_flipped)
             top_bottom_symmetry = cv2.countNonZero(top_bottom_intersection) / \
                                   cv2.countNonZero(top_bottom_union)
+
+
+            # cv2.imshow("tile_upperhalf_flipped", tile_upperhalf_flipped)
+            # cv2.imshow("tile_lowerhalf", tile_lowerhalf)
+            # cv2.waitKey(0)
             return top_bottom_symmetry
 
         if not is_vertical:
@@ -221,4 +300,8 @@ class MInstance:
             left_right_union = cv2.bitwise_or(tile_righthalf, tile_lefthalf_flipped)
             left_right_symmetry = cv2.countNonZero(left_right_intersection) / \
                                   cv2.countNonZero(left_right_union)
+
+            # cv2.imshow("tile_lefthalg_flipped", tile_lefthalf_flipped)
+            # cv2.imshow("tile_righthalf", tile_righthalf)
+            # cv2.waitKey(0)
             return left_right_symmetry

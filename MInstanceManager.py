@@ -109,7 +109,6 @@ class MInstanceManager:
 
             lower_grid_coords = MCoordinate(approx[0][0][0]+1, approx[0][0][1])  # +1 is for a line detection correction
             upper_grid_coords = MCoordinate(approx[1][0][0], approx[1][0][1])
-
             # Calculate size of the tiles within the grid
             grid_width = upper_grid_coords.x - lower_grid_coords.x
             grid_height = upper_grid_coords.y - lower_grid_coords.y
@@ -138,7 +137,7 @@ class MInstanceManager:
             # cv2.imshow("screenshot", self.screenshot)
             # cv2.imshow("grid", grid_crop)
             # cv2.imshow("tile", tile_test)
-            cv2.imwrite(r"images\masktest.png", grid_crop)
+            # cv2.imwrite(r"images\masktest.png", grid_crop)
 
 
 if __name__ == "__main__":

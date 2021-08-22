@@ -5,12 +5,12 @@ Solve Puzzles
 Record position of "guessing" spaces
 Complete Mode that will use guessing to attempt to finish the puzzle
 Record Starting Position
-Fast and able to run repeatedly for many intervals
-
-Use monte carlo sims to predict probability of a mine in each square
-
-Expert Minesweeper grid is 30x16 WxH
-"""
+    Fast and able to run repeatedly for many intervals
+    
+    Use monte carlo sims to predict probability of a mine in each square
+    
+    Expert Minesweeper grid is 30x16 WxH
+    """
 
 
 
@@ -37,7 +37,7 @@ if __name__ == "__main__":
 
     print(len(manager.instances), " Game Instances Detected")
 
-    for i in range(0, 10):
+    for i in range(0, 480):
         my_screenshot = pyautogui.screenshot()  # takes and saves screenshot
         my_screenshot.save("images\sc.png")
         manager.screenshot = cv2.imread("images\sc.png")  # debug, display basic screenshot

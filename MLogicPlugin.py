@@ -11,7 +11,24 @@ import random
 
 
 def MLogicPlugin(grid_array, flags):
-    location = [random.randint(0, 29), random.randint(0, 15)]
+
+    if not hasattr(MLogicPlugin, "colcount") and not hasattr(MLogicPlugin, "rowcount"):
+        MLogicPlugin.colcount = 0
+        MLogicPlugin.rowcount = 0
+
+    location = [MLogicPlugin.colcount, MLogicPlugin.rowcount]
+
+    if MLogicPlugin.colcount > 29:
+        MLogicPlugin.rowcount += 1
+        MLogicPlugin.colcount = 0
+        location = [MLogicPlugin.colcount, MLogicPlugin.rowcount]
+
+
+
+    MLogicPlugin.colcount += 1
+
+    # location = [random.randint(0, 29), random.randint(0, 15)]
+
     action = 'left'
     action = 'right'
     return location, action
