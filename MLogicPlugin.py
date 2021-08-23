@@ -1,9 +1,7 @@
 """
 Contains solving logic for a Minesweeper puzzle
-Makes ONE decision each update cycle.
+Makes ONE decision each update cycle. Though this may be changed to allow for multiple flags to be added in one cycle
 Takes in board information and returns an action and a location
-
-
 """
 
 import random
