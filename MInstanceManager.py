@@ -35,7 +35,7 @@ class MInstanceManager:
         self.valid_window_locations = []
         self.valid_grid_locations = []
         self.valid_tile_dims = []
-
+        self.frame_number = 0
         self._detect_windows()
         self._detect_grids()
 
@@ -54,6 +54,7 @@ class MInstanceManager:
             # print("------------------------------------------------------")
 
     def update_all(self): # updates ALL instances.
+        self.frame_number +=1
         if self.instances:
             for instance in self.instances:
                 if not instance.is_complete:

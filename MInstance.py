@@ -6,7 +6,7 @@ contains information about a single game of minesweeper on the screen
 """
 import cv2
 import numpy as np
-import MLogicPlugin
+import MLogicPlugin_Debug
 import math
 import time
 import pyautogui
@@ -41,7 +41,7 @@ class MInstance:
         self.grid_array[:] = np.NaN
         self.flags = 0
         self.is_complete = False
-
+        self.my_logic_plugin = MLogicPlugin(self.grid_array)
         self.id = MInstance.id
         MInstance.id += 1
 
@@ -50,7 +50,6 @@ class MInstance:
 
     def update(self, screen_snapshot):
         start = cv2.getTickCount()
-        # DEBUG: RUN TIME ~.609
 
 
         if self._detect_window_popup(screen_snapshot):
@@ -68,11 +67,11 @@ class MInstance:
         # 3) Uses logic plugin
         # 4) Cursor action
 
-        k = MLogicPlugin(1, 1)
+        k = self.my_logic_plugin.update(self.grid_array)
 
         self.cursor_control(k[0], k[1])
         end = cv2.getTickCount()
-        total = (end - start)/ cv2.getTickFrequency()
+        total = (end - start) / cv2.getTickFrequency()
         total
 
         # self.cursor_control((5, 5), 'left')
@@ -87,29 +86,31 @@ class MInstance:
         pyautogui.press('escape')  # pressing escape while a window popup is active will start a new game.
         # pyautogui.press('n')
 
-    def cursor_control(self, location, action):  # tells cursor to perform action at specific array[x,y] location.
-
+    def cursor_control(self, location, action='left'):  # tells cursor to perform action at specific array[x,y] location.
+        x_location, y_location = location.values()
         cursor_offset_correction = MCoordinate(self.tile_length / 2, self.tile_length / 2)
         lower_window_real_location = self.my_window_location[0]
         lower_grid_real_location = lower_window_real_location + self.my_grid_location[0]
-        x_target = lower_grid_real_location.x + cursor_offset_correction.x + self.tile_length * location[0]
-        y_target = lower_grid_real_location.y + cursor_offset_correction.y + self.tile_length * location[1]
-
-        # print("--------------------")
-        # print(x_target)
-        # print(y_target)
-        # print("--------------------")
-
-
-
-
-
-        # pyautogui.moveTo(x_target, y_target, duration=0)
+        x_target = lower_grid_real_location.x + cursor_offset_correction.x + self.tile_length * x_location
+        y_target = lower_grid_real_location.y + cursor_offset_correction.y + self.tile_length * y_location
         win32api.SetCursorPos((x_target, y_target))
         time.sleep(.01)
-        win32api.mouse_event(win32con.MOUSEEVENTF_RIGHTDOWN, x_target, y_target, 0, 0)
-        win32api.mouse_event(win32con.MOUSEEVENTF_RIGHTUP, x_target, y_target, 0, 0)
-        # pyautogui.click(button=action)
+
+        if action == 'left':
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x_target, y_target, 0, 0)
+            time.sleep(.01)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x_target, y_target, 0, 0)
+
+        elif action == 'right':
+            win32api.mouse_event(win32con.MOUSEEVENTF_RIGHTDOWN, x_target, y_target, 0, 0)
+            time.sleep(.01)
+            win32api.mouse_event(win32con.MOUSEEVENTF_RIGHTUP, x_target, y_target, 0, 0)
+        else:
+            print("---------------------------")
+            print("INVALID ACTION SPECIFIED")
+            print("---------------------------")
+        time.sleep(.01)
+        win32api.SetCursorPos((0, 0))
 
     def update_array(self, screen_snapshot):
 
@@ -135,7 +136,7 @@ class MInstance:
         # tile_height = round(grid_height / 16)
         # tile_length = max(tile_height, tile_width)  # ensuring h and w are equal prevents drift from occuring
 
-        cv2.imshow("resizaed", resized)
+        cv2.imshow("resized", resized)
         cv2.imshow("gridcop", grid_crop)
         # cv2.waitKey(0)
 
@@ -149,6 +150,8 @@ class MInstance:
             grid_blur = cv2.GaussianBlur(grid_mask, (13, 13), 0)  # blur
             grid_bw = cv2.threshold(grid_blur, 50, 255, cv2.THRESH_BINARY)[1]
             feature_masks[feature] = grid_bw
+            # cv2.imshow("grid_masks", grid_bw)
+            # cv2.waitKey(0)
 
 
         # create mask for empty tile, as its a special case it is separate
@@ -162,7 +165,7 @@ class MInstance:
         # DEBUG: ABOVE HERE TAKES APPROX .0737
         # DEBUG: TOTAL TIME FOR BELOW SECTION IS .35
         # DEBUG: APPROX TIME FOR 1 TILE OF BELOW CODE IS : .000978
-        #OPTIMIZATION IDEA: move masking outside of loop and simply slice from it.
+
         for row in range(0, 16):
             tile_list = []
             for column in range(0, 30):
@@ -210,11 +213,9 @@ class MInstance:
         # tile_blur = cv2.GaussianBlur(mask, (13, 13), 0)  # blur
         # tile_bw = cv2.threshold(tile_blur, 50, 255, cv2.THRESH_BINARY)[1]
         #
-        # # cv2.imshow("mask", mask)
-        # # cv2.imshow("BW", tile_bw)
-        # # cv2.imshow("blurr", tile_blur)
-        # # cv2.imshow("tile", tile)
-        # # cv2.waitKey(0)
+
+        # cv2.imshow("BW", tile_bw)
+        # cv2.waitKey(0)
 
         contours, hierarchy = cv2.findContours(tile_bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         for cont in contours:
@@ -222,7 +223,7 @@ class MInstance:
             peri = cv2.arcLength(cont, True)
             approx = cv2.approxPolyDP(cont, .05 * peri, True)
             # cv2.drawContours(tile_hsv, [approx], -1, (0, 255, 0), 3)
-            if 10 < area < (self.tile_length ** 2)/2:
+            if (self.tile_length ** 2)/15 < area < (self.tile_length ** 2)/2:
 
             # if 10 < area:  # TEMPORARY DEBUG SWITCH BACK TO ORIGINAL
                 moment = cv2.moments(cont)

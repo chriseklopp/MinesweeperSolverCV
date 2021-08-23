@@ -1,7 +1,9 @@
 """
-MCoordinate is a container for pixel coordinates (X,Y).
+MCoordinate is a container for coordinates (X,Y).
 Can be added or subtracted to/from other objects of the same time
 Cuts down on the amount of nested indexing required
+MCoordinate knows no distinction between pixel coordinates, and array coordinates. So it is up to the user to ensure
+they don't mix them together.
 """
 
 import numpy as np

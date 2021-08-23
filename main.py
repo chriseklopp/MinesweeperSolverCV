@@ -34,13 +34,16 @@ if __name__ == "__main__":
     manager = MInstanceManager.MInstanceManager()
 
     print("Initialized Instances")
-
     print(len(manager.instances), " Game Instances Detected")
 
-    for i in range(0, 480):
+    for i in range(0, 50):
         my_screenshot = pyautogui.screenshot()  # takes and saves screenshot
         my_screenshot.save("images\sc.png")
         manager.screenshot = cv2.imread("images\sc.png")  # debug, display basic screenshot
         manager.update_all()
-    manager.reset_all()
+        print("frame: ", manager.frame_number)
+        print("-------------------------")
+        print()
+
+    # manager.reset_all()
     #cv2.waitKey(0)
