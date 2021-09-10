@@ -36,10 +36,12 @@ if __name__ == "__main__":
     print("Initialized Instances")
     print(len(manager.instances), " Game Instances Detected")
 
-    for i in range(0, 50):
+    for i in range(0, 200):
         my_screenshot = pyautogui.screenshot()  # takes and saves screenshot
-        my_screenshot.save("images\sc.png")
-        manager.screenshot = cv2.imread("images\sc.png")  # debug, display basic screenshot
+        # my_screenshot.save("images\sc.png")
+        # manager.screenshot = cv2.imread("images\sc.png")  # debug, display basic screenshot
+        image = cv2.cvtColor(np.array(my_screenshot), cv2.COLOR_RGB2BGR)
+        manager.screenshot = image
         manager.update_all()
         print("frame: ", manager.frame_number)
         print("-------------------------")

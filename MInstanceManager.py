@@ -59,6 +59,8 @@ class MInstanceManager:
             for instance in self.instances:
                 if not instance.is_complete:
                     instance.update(self.screenshot)
+                else:
+                    instance.reset()
 
         else:
             print("FAILED TO UPDATE. NO ACTIVE INSTANCES")
@@ -138,7 +140,7 @@ class MInstanceManager:
             # cv2.imshow("screenshot", self.screenshot)
             # cv2.imshow("grid", grid_crop)
             # cv2.imshow("tile", tile_test)
-            # cv2.imwrite(r"images\masktest.png", grid_crop)
+            cv2.imwrite(r"images\masktest.png", grid_crop)
 
 
 if __name__ == "__main__":

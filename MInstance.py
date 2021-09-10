@@ -23,13 +23,13 @@ class MInstance:
 
     feature_definitions = {'1': ([85, 66, 130], [117, 255, 255], [0, 0]),
                            '2': ([44, 162, 87], [66, 255, 158], [0, 0]),
-                           '3': ([0, 101, 144], [37, 255, 202], [1, 0]),
+                           '3': ([0, 101, 144], [37, 255, 202], [1, 0]),  # 3 SOMETIMES SHOWN AS 7
                            '4': ([97, 232, 64], [161, 255, 217], [0, 0]),
                            '5': ([0, 62, 107], [37, 255, 144], [0, 0]),
                            '6': ([63, 175, 96], [101, 255, 188], [0, 0]),
                            '8': ([0, 101, 144], [37, 255, 202], [1, 1]),
                            '7': ([0, 101, 144], [37, 255, 202], [0, 0]),
-                           '99': ([0, 77, 188], [59, 255, 255], [0, 0])
+                           '99': ([0, 77, 188], [59, 255, 255], [0, 0]) # FLAG DETECTION SOMETIMES FAILING
                            }
     # feature_definitions = {'1':  ([85, 66, 130], [117, 255, 255], [0, 0])}
     id = 0
@@ -49,23 +49,20 @@ class MInstance:
         print(self.id)
 
     def update(self, screen_snapshot):
-        start = cv2.getTickCount()
-
-
-        if self._detect_window_popup(screen_snapshot):
-            # if this hits true trigger reset sequence.
-            print("Window Detected")
-            pass
-        # start2= cv2.getTickCount()
-        self.update_array(screen_snapshot)  # DEBUG: OLD METHOD ~.32 SEC
-        # end2 = cv2.getTickCount()
-        # total = (end2 - start2) / cv2.getTickFrequency()
-        # total
-        self.debugarray = self.grid_array.transpose()
         # 1) Receives screen snapshot
+        # 2) Checks for game end popup
         # 2) Updates own array
         # 3) Uses logic plugin
         # 4) Cursor action
+
+        start = cv2.getTickCount()
+
+        if self._detect_window_popup(screen_snapshot):
+            self.is_complete = True
+            return
+        self.update_array(screen_snapshot)  # DEBUG: OLD METHOD ~.32 SEC
+
+        self.debugarray = self.grid_array.transpose()
 
         k = self.my_logic_plugin.update(self.grid_array)
 
@@ -77,14 +74,12 @@ class MInstance:
         # self.cursor_control((5, 5), 'left')
 
     def reset(self):
-        # print(self.grid_array)
-        # self.grid_array = np.empty([30, 16])
-        # self.grid_array[:] = np.NaN
+        self.grid_array = np.empty([30, 16])
         self.flags = 0
         self.is_complete = False
-        self.cursor_control([0, 0], 'left')  # ensures the correct window is selected
-        pyautogui.press('escape')  # pressing escape while a window popup is active will start a new game.
-        # pyautogui.press('n')
+        self.cursor_control(MCoordinate(0, 0), 'left')  # ensures the correct window is selected
+        win32api.keybd_event(0x1B, 0, 0, 0)   # escape key
+        # pyautogui.press('escape')  # pressing escape while a window popup is active will start a new game.
 
     def cursor_control(self, location, action='left'):  # tells cursor to perform action at specific array[x,y] location.
         x_location, y_location = location.values()
@@ -197,9 +192,24 @@ class MInstance:
                     else:
                         self.grid_array[column, row] = np.NaN
 
-    def _detect_window_popup(self,
-                             screen_snapshot):  # this would occur on a won or lost game. Must differentiate between win / lose
-        # print(screen_snapshot)
+    def _detect_window_popup(self, screen_snapshot):  # this would occur on a won or lost game. Must differentiate between win / lose
+        lower_window_coords, upper_window_coords = self.my_window_location
+        lower_grid_coords, upper_grid_coords = self.my_grid_location
+        window = screen_snapshot[lower_window_coords.y:upper_window_coords.y,
+                                 lower_window_coords.x:upper_window_coords.x]
+        grid_crop = window[lower_grid_coords.y:upper_grid_coords.y,
+                           lower_grid_coords.x:upper_grid_coords.x]
+        grid_hsv = cv2.cvtColor(grid_crop, cv2.COLOR_BGR2HSV)
+        lower = np.array([0, 0, 218])
+        upper = np.array([179, 1, 255])
+        grid_mask = cv2.inRange(grid_hsv, lower, upper)
+        grid_blur = cv2.GaussianBlur(grid_mask, (13, 13), 0)  # blur
+        grid_bw = cv2.threshold(grid_blur, 50, 255, cv2.THRESH_BINARY)[1]
+        contours, hierarchy = cv2.findContours(grid_bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        for cont in contours:
+            area = cv2.contourArea(cont)
+            if (self.tile_length * 10)**2 > area > (self.tile_length * 3)**2:
+                return True
         return False
 
     def _detect_feature(self, values, tile_bw):
@@ -241,15 +251,17 @@ class MInstance:
 
                     # if only top-bottom symmetry required
                     if symmetry[0] and not symmetry[1]:
-                        if top_bottom_symmetry > .75 and left_right_symmetry < .75:
+                        if top_bottom_symmetry > .6 and left_right_symmetry < .75:
                             # detected_coordinates.append(MCoordinate(avg_x, avg_y))
                             return True
                         else:
+                            # cv2.imshow("tile", tile_bw)
+                            # cv2.waitKey(0)
                             return False
 
                     # if only left-right symmetry required
                     if symmetry[1] and not symmetry[0]:
-                        if left_right_symmetry > .75 and top_bottom_symmetry < .75:
+                        if left_right_symmetry > .75 and top_bottom_symmetry < .6:
                             # detected_coordinates.append(MCoordinate(avg_x, avg_y))
                             return True
                         else:
@@ -257,7 +269,7 @@ class MInstance:
 
                     # if both symmetry required
                     if symmetry[0] and symmetry[1]:
-                        if left_right_symmetry > .75 and top_bottom_symmetry > .75:
+                        if left_right_symmetry > .75 and top_bottom_symmetry > .6:
                             # detected_coordinates.append(MCoordinate(avg_x, avg_y))
                             return True
                         else:
