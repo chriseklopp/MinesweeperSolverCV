@@ -74,6 +74,8 @@ class MInstance:
         # self.cursor_control((5, 5), 'left')
 
     def reset(self):
+        np.savetxt('lastarray', self.grid_array, delimiter=',')
+        time.sleep(5)
         self.grid_array = np.empty([30, 16])
         self.flags = 0
         self.is_complete = False
@@ -88,6 +90,7 @@ class MInstance:
         lower_grid_real_location = lower_window_real_location + self.my_grid_location[0]
         x_target = lower_grid_real_location.x + cursor_offset_correction.x + self.tile_length * x_location
         y_target = lower_grid_real_location.y + cursor_offset_correction.y + self.tile_length * y_location
+        print(f"CURSOR DEBUG: ACTION ={action}, LOCATION: {location.values()}")
         win32api.SetCursorPos((x_target, y_target))
         time.sleep(.01)
 
@@ -131,8 +134,8 @@ class MInstance:
         # tile_height = round(grid_height / 16)
         # tile_length = max(tile_height, tile_width)  # ensuring h and w are equal prevents drift from occuring
 
-        cv2.imshow("resized", resized)
-        cv2.imshow("gridcop", grid_crop)
+        # cv2.imshow("resized", resized)
+        # cv2.imshow("gridcop", grid_crop)
         # cv2.waitKey(0)
 
         # create feature masks for whole grid that can be sliced to the individual tiles
