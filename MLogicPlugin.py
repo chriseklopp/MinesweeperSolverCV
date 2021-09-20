@@ -104,62 +104,25 @@ class MLogicPlugin:
                         self.tiles_examined.append(location.values())
                         location_surrounding_tiles = self.get_surrounding_tiles(location)
                         for adj_location, value in location_surrounding_tiles:
-                            if np.isnan(value):
-                                lower_pair, upper_pair = self.enumerate_section(adj_location)
-                                break
-                        if not lower_pair and not upper_pair:
-                            print("ERROR: SOMETHING WENT WRONG")
-
-                        sub_plot = self.grid_copy[lower_pair.x:upper_pair.x + 1, lower_pair.y:upper_pair.y + 1]
-                        sub_plot_number_unrevealed = np.count_nonzero(np.isnan(sub_plot))
-                        if sub_plot_number_unrevealed > 14:  # THIS WHOLE SECTION NEEDS A REWRITE, TOO MESSY.
-                            row_num, col_num = np.shape(sub_plot)
-                            if row_num % 2 != 0:
-                                row_num += 1
-                            if col_num % 2 != 0:
-                                col_num += 1
-
-                            plots = []
-                            if row_num < col_num:
-                                left_subplot = self.grid_copy[:, :int(col_num/2)]
-                                right_subplot = self.grid_copy[:, int(col_num/2):]
-                                plots.append(left_subplot)
-                                plots.append(right_subplot)
-
-                            else:
-                                upper_subplot = self.grid_copy[:int(row_num/2), :]
-                                lower_subplot = self.grid_copy[int(row_num/2):, :]
-                                plots.append(upper_subplot)
-                                plots.append(lower_subplot)
-
-
-                            for plot in plots:
-                                sub_plot_location, probability, action = self.magic_of_probability(plot)
-                                location = lower_pair + sub_plot_location
-                                if probability < 1:
-                                    section_results.append((location, probability, action))
-                                    continue
-                                self.previous_focus = focus
-                                print(f"LOCATION: {location.values()}")
-                                return location, action
-
-                        # if 1 < sub_plot_number_unrevealed:  # DEBUG PURPOSES
-
-                        else:
-                            sub_plot_location, probability, action = self.magic_of_probability(sub_plot)
-                            location = lower_pair + sub_plot_location
-                            if probability < 1:
-                                section_results.append((location, probability, action))
+                            if not np.isnan(value):
                                 continue
-                            self.previous_focus = focus
-                            print(f"LOCATION: {location.values()}")
-                            return location, action
 
-                            # else:  # if the subplot is TOO big (alternative would result in massive 2^n complexity)
-                            #     continue
-                            # print("---------------------")
+                        generated_subsets = self.create_subset(adj_location)
+                        for grid_location, subplot in generated_subsets:
+                            subplot_number_unrevealed = np.count_nonzero(np.isnan(subplot))
 
-                    else:  # occurs when no section with a P(x) = 1 move.
+                            if subplot_number_unrevealed <= 1: # protects against a case where theres only 1 tile (should fix this in the generate subset function)
+                                continue
+
+                            offset, probability, action = self.magic_of_probability(subplot)
+                            if probability == 1:
+                                print(f"LOCATION: {(grid_location + offset).values()} PROBABILITY: {probability}")
+                                return grid_location + offset, action
+                            else:
+                                section_results.append((grid_location + offset, probability, action))
+
+                    else:  # occurs when all possible starting locations have been exhausted.
+                        self.previous_focus = focus
                         sub_plot_location, probability, action = zip(*section_results)
                         max_probability = max(probability)
                         max_index = probability.index(max_probability)
@@ -173,12 +136,9 @@ class MLogicPlugin:
         print('ENTERING PART 5')
         return self.random_location()
 
-    def is_satisfied(self, focus, alternative_grid=None, zero_true=False):
+    def is_satisfied(self, focus, alternative_grid=None):
         if alternative_grid is None:
             value = self.grid_array[focus.x, focus.y]
-            if zero_true:
-                if value ==0:
-                    return True
             surrounding_flags = 0
             for adjacent_location, adjacent_value in self.get_surrounding_tiles(focus):
                 if adjacent_value == 99:
@@ -190,9 +150,6 @@ class MLogicPlugin:
 
         else:
             value = alternative_grid[focus.x, focus.y]
-            if zero_true:
-                if value ==0:
-                    return True
             surrounding_flags = 0
             for adjacent_location, adjacent_value in self.get_surrounding_tiles(focus, alternative_grid=alternative_grid):
                 if adjacent_value == 99:
@@ -239,7 +196,7 @@ class MLogicPlugin:
                     tile_value = self.grid_array[i, j]
                     if tile_value and not np.isnan(tile_value) and tile_value != 99:
                         location = MCoordinate(i, j)
-                        print((i, j), "DISCONNECTED FOCUS JUMP, EX = True")
+                        # print((i, j), "DISCONNECTED FOCUS JUMP, EX = True")
                         return location
 
         if allow_examined and not allow_satisfied:
@@ -249,7 +206,7 @@ class MLogicPlugin:
                     if tile_value and not np.isnan(tile_value) and tile_value != 99:
                         location = MCoordinate(i, j)
                         if not self.is_satisfied(location):
-                            print((i, j), "DISCONNECTED FOCUS JUMP, EX = True")
+                            # print((i, j), "DISCONNECTED FOCUS JUMP, EX = True")
                             return location
 
         if not allow_examined and allow_satisfied:
@@ -259,7 +216,7 @@ class MLogicPlugin:
                     if tile_value and not np.isnan(tile_value) and tile_value != 99:
                         location = MCoordinate(i, j)
                         if location.values() not in self.tiles_examined:
-                            print((i, j), "DISCONNECTED FOCUS JUMP, EX = False")
+                            # print((i, j), "DISCONNECTED FOCUS JUMP, EX = False")
                             return location
 
         if not allow_examined and not allow_satisfied:
@@ -269,7 +226,7 @@ class MLogicPlugin:
                     if tile_value and not np.isnan(tile_value) and tile_value != 99:
                         location = MCoordinate(i, j)
                         if location.values() not in self.tiles_examined and not self.is_satisfied(location):
-                            print((i, j), "DISCONNECTED FOCUS JUMP, EX = False")
+                            # print((i, j), "DISCONNECTED FOCUS JUMP, EX = False")
                             return location
         return 0
 
@@ -334,6 +291,154 @@ class MLogicPlugin:
         upper_coordinate_pair = MCoordinate(max(x_values), max(y_values))
         return lower_coordinate_pair, upper_coordinate_pair
 
+    def create_subset(self, focus):
+
+        # THIS MAY BE RETURNING INCORRECT LOCATIONS SOMETIMES
+
+
+        grid_copy = np.copy(self.grid_array)
+        valid_list = []
+        checked_list = []
+        unchecked_list = [focus.values()]
+
+        while unchecked_list:  # creates LIST of all relevant unrevealed tiles.
+            location = unchecked_list[0]
+            m_location = MCoordinate(location[0], location[1])
+            checked_list.append(m_location.values())
+            unchecked_list.remove(m_location.values())
+
+            adj_locations, adj_values = zip(*self.get_surrounding_tiles(m_location))
+            value_vector = np.array(adj_values)
+            mask = (value_vector >= 1) & (value_vector < 99)
+            number_nonzero = np.count_nonzero(mask)
+
+            if number_nonzero:  # if location has a numeric adjacent
+                valid_list.append(m_location.values())
+                for cardinal_location, cardinal_value in self.get_cardinal_tiles(m_location):
+                    if np.isnan(cardinal_value) and cardinal_location.values() not in checked_list:
+                        unchecked_list.append(cardinal_location.values())
+
+        tile_list = valid_list.copy()  # adds locations of all adjacent numeric values surrounding the unrevealed tiles.
+        for location in valid_list:
+            m_location = MCoordinate(location[0], location[1])
+            location_value = self.grid_array[m_location.values()]
+            for adj_location, adj_value in self.get_surrounding_tiles(m_location):
+                if adj_location.values() not in tile_list and 1 <= adj_value < 10:
+                    tile_list.append(adj_location.values())
+
+        final_tile_list = tile_list.copy()  # adds all adj tiles to listed numerics, and sets any new numeric to 0
+        for location in tile_list:
+            m_location = MCoordinate(location[0], location[1])
+            location_value = self.grid_array[m_location.values()]
+            if 1 <= location_value < 10 and not np.isnan(location_value):
+                for adj_location, adj_value in self.get_surrounding_tiles(m_location):
+                    if adj_location.values() not in final_tile_list:
+                        if 1 <= adj_value < 10:
+                            grid_copy[adj_location.values()] = 0
+                        final_tile_list.append(adj_location.values())
+
+        x_values = []
+        y_values = []
+        for location in final_tile_list:
+            self.tiles_examined.append(location)
+            x_values.append(location[0])
+            y_values.append(location[1])
+
+        lower_coordinate_pair = MCoordinate(min(x_values), min(y_values))
+        upper_coordinate_pair = MCoordinate(max(x_values), max(y_values))
+        subset = grid_copy[lower_coordinate_pair.x:upper_coordinate_pair.x + 1,
+                           lower_coordinate_pair.y:upper_coordinate_pair.y + 1]
+
+        generated_subsets = []
+        cleaned_results = self.clean_subset(subset)  # this step may result in the subset getting split if its too large
+        for offset, subset in cleaned_results:
+            generated_subsets.append((lower_coordinate_pair+offset, subset))
+
+        return generated_subsets
+
+    def clean_subset(self, subset):
+        row_num, col_num = np.shape(subset)
+        for row in range(0, row_num):
+            for column in range(0, col_num):
+                location = MCoordinate(row, column)
+                value = subset[location.values()]
+                surrounding_tiles, surrounding_values = zip(*self.get_surrounding_tiles(location,
+                                                                                        alternative_grid=subset))
+                value_vector = np.array(surrounding_values)
+                mask = (value_vector >= 1) & (value_vector < 99)
+                number_nonzero = np.count_nonzero(mask)
+
+                if np.isnan(value) and not number_nonzero:
+                    subset[location.values()] = 0
+
+        subset_number_unrevealed = np.count_nonzero(np.isnan(subset))
+        if subset_number_unrevealed < 14:  # Return subset if it is "small enough"
+            return [(MCoordinate(0, 0), subset)]  # return offset from original subset and cleaned subsets
+
+        cleaned_split = []
+        split_results = self.split_subset(subset)
+        for offset, subplot in split_results:
+            subset_number_unrevealed = np.count_nonzero(np.isnan(subplot))
+            if subset_number_unrevealed < 14:
+                cleaned_split.append((offset, subplot))
+            else:
+                result = self.split_subset(subplot)
+                for location, plot in result:
+                    cleaned_split.append((offset + location, plot))
+
+        return cleaned_split
+
+    @staticmethod
+    def split_subset(subset):
+        subset_list = []
+        row_num, col_num = np.shape(subset)
+        if row_num % 2 != 0:
+            row_num += 1
+        if col_num % 2 != 0:
+            col_num += 1
+
+        left_subplot = subset[:, :int(col_num / 2)]
+        right_subplot = subset[:, int(col_num / 2):]
+        upper_subplot = subset[:int(row_num / 2), :]
+        lower_subplot = subset[int(row_num / 2):, :]
+
+        left_number_unrevealed = np.count_nonzero(np.isnan(left_subplot))
+        right_number_unrevealed = np.count_nonzero(np.isnan(right_subplot))
+        upper_number_unrevealed = np.count_nonzero(np.isnan(upper_subplot))
+        lower_number_unrevealed = np.count_nonzero(np.isnan(lower_subplot))
+
+        lr_magnitude = abs(left_number_unrevealed - right_number_unrevealed)
+        ul_magnitude = abs(upper_number_unrevealed - lower_number_unrevealed)
+
+        if lr_magnitude > ul_magnitude:
+
+            upper_mask = (upper_subplot >= 1) & (upper_subplot < 99)
+            upper_mask_slice = upper_mask[-1, :]
+            upper_subplot[-1, :][upper_mask_slice] = 0
+
+            lower_mask = (lower_subplot >= 1) & (lower_subplot < 99)
+            lower_mask_slice = lower_mask[0, :]
+            lower_subplot[0, :][lower_mask_slice] = 0
+
+            subset_list.append((MCoordinate(0, 0), upper_subplot))
+            subset_list.append((MCoordinate(int(row_num / 2), 0), lower_subplot))
+
+        else:
+
+            left_mask = (left_subplot >= 1) & (left_subplot < 99)
+            left_mask_slice = left_mask[:, -1]
+            left_subplot[:, -1][left_mask_slice] = 0
+
+            right_mask = (right_subplot >= 1) & (right_subplot < 99)
+            right_mask_slice = right_mask[:, 0]
+            right_subplot[:, 0][right_mask_slice] = 0
+
+            subset_list.append((MCoordinate(0, 0), left_subplot))
+            subset_list.append((MCoordinate(0, int(col_num / 2)), right_subplot))
+
+
+        return subset_list  # returns offset (for each) from original subset and the split subsets.
+
     def magic_of_probability(self, subset):
         # Handles a subset of the grid. Generates all 2^n, n= # unrevealed tiles possible mine layouts.
         # Validate each layout to determine which ones are possible
@@ -350,18 +455,18 @@ class MLogicPlugin:
         valid_combinations = []
         row_num, col_num = np.shape(subset)
 
-        for row in range(0, row_num):
-            for column in range(0, col_num):
-                location = MCoordinate(row, column)
-                value = subset[location.values()]
-                surrounding_tiles, surrounding_values = zip(*self.get_surrounding_tiles(location,alternative_grid=subset))
-                value_vector = np.array(surrounding_values)
-                # adj_unrevealed = np.count_nonzero(np.isnan(value_vector)) + np.count_nonzero(value_vector == 99)
-                mask = (value_vector >= 1) & (value_vector < 99)
-                number_nonzero = np.count_nonzero(mask)
-
-                if np.isnan(value) and not number_nonzero:
-                    subset[location.values()] = 0
+        # for row in range(0, row_num):
+        #     for column in range(0, col_num):
+        #         location = MCoordinate(row, column)
+        #         value = subset[location.values()]
+        #         surrounding_tiles, surrounding_values = zip(*self.get_surrounding_tiles(location,alternative_grid=subset))
+        #         value_vector = np.array(surrounding_values)
+        #         # adj_unrevealed = np.count_nonzero(np.isnan(value_vector)) + np.count_nonzero(value_vector == 99)
+        #         mask = (value_vector >= 1) & (value_vector < 99)
+        #         number_nonzero = np.count_nonzero(mask)
+        #
+        #         if np.isnan(value) and not number_nonzero:
+        #             subset[location.values()] = 0
 
 
 

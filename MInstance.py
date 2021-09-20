@@ -90,7 +90,7 @@ class MInstance:
         lower_grid_real_location = lower_window_real_location + self.my_grid_location[0]
         x_target = lower_grid_real_location.x + cursor_offset_correction.x + self.tile_length * x_location
         y_target = lower_grid_real_location.y + cursor_offset_correction.y + self.tile_length * y_location
-        print(f"CURSOR DEBUG: ACTION ={action}, LOCATION: {location.values()}")
+        # print(f"CURSOR DEBUG: ACTION ={action}, LOCATION: {location.values()}")
         win32api.SetCursorPos((x_target, y_target))
         time.sleep(.01)
 
