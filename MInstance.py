@@ -103,6 +103,16 @@ class MInstance:
             win32api.mouse_event(win32con.MOUSEEVENTF_RIGHTDOWN, x_target, y_target, 0, 0)
             time.sleep(.01)
             win32api.mouse_event(win32con.MOUSEEVENTF_RIGHTUP, x_target, y_target, 0, 0)
+
+        elif action == 'double_left':
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x_target, y_target, 0, 0)
+            time.sleep(.01)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x_target, y_target, 0, 0)
+            time.sleep(.01)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x_target, y_target, 0, 0)
+            time.sleep(.01)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x_target, y_target, 0, 0)
+
         else:
             print("---------------------------")
             print("INVALID ACTION SPECIFIED")

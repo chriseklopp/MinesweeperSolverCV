@@ -3,12 +3,8 @@ ___________________MineSweeper AI _________________________
 Detect MineSweeper Puzzles
 Solve Puzzles
 Record position of "guessing" spaces
-Complete Mode that will use guessing to attempt to finish the puzzle
 Record Starting Position
     Fast and able to run repeatedly for many intervals
-    
-    Use monte carlo sims to predict probability of a mine in each square
-    
     Expert Minesweeper grid is 30x16 WxH
     """
 
@@ -21,12 +17,13 @@ import random
 import matplotlib
 import pyautogui
 import time
+import cProfile
 
 
 import MInstanceManager
 
 
-if __name__ == "__main__":
+def main():
     time.sleep(3)
 
     print("MineSweeper Bot V-0.5")
@@ -36,7 +33,7 @@ if __name__ == "__main__":
     print("Initialized Instances")
     print(len(manager.instances), " Game Instances Detected")
 
-    for i in range(0, 2000):
+    for i in range(0, 5000):
         my_screenshot = pyautogui.screenshot()  # takes and saves screenshot
         # my_screenshot.save("images\sc.png")
         # manager.screenshot = cv2.imread("images\sc.png")  # debug, display basic screenshot
@@ -47,5 +44,6 @@ if __name__ == "__main__":
         print("-------------------------")
         print()
 
-    # manager.reset_all()
-    #cv2.waitKey(0)
+if __name__ == "__main__":
+    # cProfile.run(main())
+    main()

@@ -21,12 +21,19 @@ and Enumerate section and run Simulation on area. Make a probabilistic mine sele
 """
 
 
+# Implement backtracking algorithm.
+
+
 import random
+import time
 import numpy as np
 from MCoordinate import MCoordinate
 import cv2
 from itertools import product
 
+import sys
+rec_limit=1500
+sys.setrecursionlimit(rec_limit)
 
 class MLogicPlugin:
 
@@ -79,11 +86,17 @@ class MLogicPlugin:
                         return location, 'right'
         # "RULE 2"
         if self.is_satisfied(focus):
+
             for location, value in focus_surrounding_tiles:
                 if np.isnan(value):
-                    print(location.values(), "RULE2 RETURN")
+                    print(focus.values(), "RULE2 RETURN")
                     self.previous_focus = focus
-                    return location, 'left'
+                    return focus, 'double_left'
+
+                    # print(location.values(), "RULE2 RETURN")
+                    # self.previous_focus = focus
+                    # return location, 'left'
+
         #  ##### PART 2) #####
         for location, value in focus_surrounding_tiles:
             if value and not np.isnan(value) and value != 99 and location.values() not in self.tiles_examined:
@@ -104,9 +117,10 @@ class MLogicPlugin:
                         self.tiles_examined.append(location.values())
                         location_surrounding_tiles = self.get_surrounding_tiles(location)
                         for adj_location, value in location_surrounding_tiles:
-                            if not np.isnan(value):
-                                continue
+                            if np.isnan(value):
+                                break
 
+                        # generated_subsets = self.new_create_subset(adj_location)
                         generated_subsets = self.create_subset(adj_location)
                         for grid_location, subplot in generated_subsets:
                             subplot_number_unrevealed = np.count_nonzero(np.isnan(subplot))
@@ -114,7 +128,10 @@ class MLogicPlugin:
                             if subplot_number_unrevealed <= 1: # protects against a case where theres only 1 tile (should fix this in the generate subset function)
                                 continue
 
-                            offset, probability, action = self.magic_of_probability(subplot)
+                            # offset, probability, action = self.backtracking_method(subplot)
+                            # print(result)
+                            offset, probability, action = self.brute_force_method(subplot)
+
                             if probability == 1:
                                 print(f"LOCATION: {(grid_location + offset).values()} PROBABILITY: {probability}")
                                 return grid_location + offset, action
@@ -123,6 +140,9 @@ class MLogicPlugin:
 
                     else:  # occurs when all possible starting locations have been exhausted.
                         self.previous_focus = focus
+                        if not section_results:
+                            print("ERROR. NO SUBSETS WERE CREATED.")
+                            break
                         sub_plot_location, probability, action = zip(*section_results)
                         max_probability = max(probability)
                         max_index = probability.index(max_probability)
@@ -151,7 +171,8 @@ class MLogicPlugin:
         else:
             value = alternative_grid[focus.x, focus.y]
             surrounding_flags = 0
-            for adjacent_location, adjacent_value in self.get_surrounding_tiles(focus, alternative_grid=alternative_grid):
+            for adjacent_location, adjacent_value in self.get_surrounding_tiles(focus,
+                                                                                alternative_grid=alternative_grid):
                 if adjacent_value == 99:
                     surrounding_flags += 1
             if surrounding_flags == value:
@@ -159,31 +180,86 @@ class MLogicPlugin:
             else:
                 return False
 
-    def get_surrounding_tiles(self, focus, alternative_grid=None):  # returns list of location = values of surrounding tiles
+    def exceeds_satisfied(self, focus, alternative_grid=None):
+        # similar to the is_satisfied function, but returns true if a tile has more adj mines than its number,
+        # used in the backtracking algorithm.
         if alternative_grid is None:
+            value = self.grid_array[focus.x, focus.y]
+            surrounding_flags = 0
+            for adjacent_location, adjacent_value in self.get_surrounding_tiles(focus):
+                if adjacent_value == 99:
+                    surrounding_flags += 1
+            if surrounding_flags > value:
+                return True
+            else:
+                return False
+
+        else:
+            value = alternative_grid[focus.x, focus.y]
+            surrounding_flags = 0
+            for adjacent_location, adjacent_value in self.get_surrounding_tiles(focus,
+                                                                                alternative_grid=alternative_grid):
+                if adjacent_value == 99:
+                    surrounding_flags += 1
+            if surrounding_flags > value:
+                return True
+            else:
+                return False
+
+    def get_surrounding_tiles(self, focus, alternative_grid=None):
+        if alternative_grid is None:
+            row_num, col_num = np.shape(self.grid_array)
+            x_min = -1
+            x_max = 2
+            y_min = -1
+            y_max = 2
+            if focus.x == 0:
+                x_min += 1
+            if focus.x == row_num - 1:
+                x_max -= 1
+            if focus.y == 0:
+                y_min += 1
+            if focus.y == col_num - 1:
+                y_max -= 1
+            x_range = range(x_min, x_max)
+            y_range = range(y_min, y_max)
+
             surrounding_tiles = []
-            for i in range(-1, 2):
-                for j in range(-1, 2):
+            for i in x_range:
+                for j in y_range:
                     if i or j:
                         x_location = focus.x + i
                         y_location = focus.y + j
-                        if 30 > x_location >= 0 and 16 > y_location >= 0:
-                            tile_value = self.grid_array[x_location, y_location]
-                            surrounding_tiles.append((MCoordinate(x_location, y_location), tile_value))
+                        tile_value = self.grid_array[x_location, y_location]
+                        surrounding_tiles.append((MCoordinate(x_location, y_location), tile_value))
 
             return surrounding_tiles
 
         else:
             row_num, col_num = np.shape(alternative_grid)
+            x_min = -1
+            x_max = 2
+            y_min = -1
+            y_max = 2
+            if focus.x == 0:
+                x_min += 1
+            if focus.x == row_num - 1:
+                x_max -= 1
+            if focus.y == 0:
+                y_min += 1
+            if focus.y == col_num - 1:
+                y_max -= 1
+            x_range = range(x_min, x_max)
+            y_range = range(y_min, y_max)
+
             surrounding_tiles = []
-            for i in range(-1, 2):
-                for j in range(-1, 2):
+            for i in x_range:
+                for j in y_range:
                     if i or j:
                         x_location = focus.x + i
                         y_location = focus.y + j
-                        if row_num > x_location >= 0 and col_num > y_location >= 0:
-                            tile_value = alternative_grid[x_location, y_location]
-                            surrounding_tiles.append((MCoordinate(x_location, y_location), tile_value))
+                        tile_value = alternative_grid[x_location, y_location]
+                        surrounding_tiles.append((MCoordinate(x_location, y_location), tile_value))
 
             return surrounding_tiles
 
@@ -230,55 +306,34 @@ class MLogicPlugin:
                             return location
         return 0
 
-    def enumerate_section(self, focus):  # this is recursive, returns two MCoordinate objects, TL and BR corners.
-        """
-        enumerate all mine possibilities in a section around a tile. SHOULD ONLY BE USED ON AN UNSATISFIED TILE.
-        start on an unsatisfied revealed tile. chain along adjacent revealed unsatisfied tiles.
-        Adds the focus and its adjacent unrevealed tiles to the subset for cropping.
-        """
+    def new_create_subset(self, focus):
 
-        self.grid_copy = np.copy(self.grid_array)
+        grid_copy = np.copy(self.grid_array)
         valid_list = []
         checked_list = []
-        unchecked_list = [focus.values()]
-        while unchecked_list: # while there are unchecked tiles.
 
-            location = unchecked_list[0]
+        # populates valid_list with unrevealed tile locations
+        self.new_create_subset_recursion(focus, valid_list, checked_list)
+
+        numerics_list = []
+        for location in valid_list:  # populate list of adj, numeric locations
             m_location = MCoordinate(location[0], location[1])
-            checked_list.append(m_location.values())
-            unchecked_list.remove(m_location.values())
-
-            adj_locations, adj_values = zip(*self.get_surrounding_tiles(m_location))
-            value_vector = np.array(adj_values)
-            # adj_unrevealed = np.count_nonzero(np.isnan(value_vector)) + np.count_nonzero(value_vector == 99)
-            mask = (value_vector >= 1) & (value_vector < 99)
-            number_nonzero = np.count_nonzero(mask)
-
-            if number_nonzero: # if location has a numeric adjacent
-                valid_list.append(m_location.values())
-                for cardinal_location, cardinal_value in self.get_cardinal_tiles(m_location):
-                    if np.isnan(cardinal_value) and cardinal_location.values() not in checked_list:
-                        unchecked_list.append(cardinal_location.values())
-
-        tile_list = valid_list.copy()
-        for location in valid_list:
-            m_location = MCoordinate(location[0], location[1])
-            location_value = self.grid_array[m_location.values()]
             for adj_location, adj_value in self.get_surrounding_tiles(m_location):
-                if adj_location.values() not in tile_list and 1 <= adj_value < 10:
-                    tile_list.append(adj_location.values())
+                if 1 <= adj_value < 10:
+                    numerics_list.append(adj_location.values())
 
-        final_tile_list = tile_list.copy()
-        for location in tile_list:
+        accessory_list = []
+        for location in numerics_list:  # populate list of adj locations (zeroing out numeric)
             m_location = MCoordinate(location[0], location[1])
-            location_value = self.grid_array[m_location.values()]
-            if 1 <= location_value < 10 and not np.isnan(location_value):
-                for adj_location, adj_value in self.get_surrounding_tiles(m_location):
-                    if adj_location.values() not in final_tile_list:
-                        if 1 <= adj_value < 10:
-                            self.grid_copy[adj_location.values()] = 0
-                        final_tile_list.append(adj_location.values())
+            for adj_location, adj_value in self.get_surrounding_tiles(m_location):
+                if adj_location.values() in numerics_list or adj_location.values() in valid_list:   # skip values already in our list.
+                    continue
 
+                accessory_list.append(adj_location.values())
+                if 1 <= adj_value < 10:
+                    grid_copy[adj_location.values()] = 0
+
+        final_tile_list = valid_list + numerics_list + accessory_list
 
         x_values = []
         y_values = []
@@ -289,12 +344,43 @@ class MLogicPlugin:
 
         lower_coordinate_pair = MCoordinate(min(x_values), min(y_values))
         upper_coordinate_pair = MCoordinate(max(x_values), max(y_values))
-        return lower_coordinate_pair, upper_coordinate_pair
+        subset = grid_copy[lower_coordinate_pair.x:upper_coordinate_pair.x + 1,
+                           lower_coordinate_pair.y:upper_coordinate_pair.y + 1]
+
+        adjusted_tile_list = []
+        for tile in final_tile_list:
+            adjusted_tile_list.append((tile[0] - lower_coordinate_pair.x, tile[1] - lower_coordinate_pair.y))
+
+        row_num, col_num = np.shape(subset)
+        for row in range(0, row_num):
+            for column in range(0, col_num):
+                if (row, column) not in adjusted_tile_list:
+                    subset[row, column] = 0
+
+        print("I hope this is good?")
+
+        return [(lower_coordinate_pair, subset)]
+
+    def new_create_subset_recursion(self, focus, valid_list, checked_list):
+
+        checked_list.append(focus.values())  # prevent it from being checked again
+
+        flag_adj = 0
+        adj_num = 0
+        for adj_location, adj_value in self.get_surrounding_tiles(focus):  # if it has a numeric adjacent add to list.
+            if adj_value == 99:
+                flag_adj += 1
+                continue
+            if 1 <= adj_value < 10:
+                valid_list.append(focus.values())
+                adj_num += 1
+
+        if flag_adj < adj_num:  # only chain to the next if it has more than 1 numeric adjacent.
+            for cardinal_location, cardinal_value in self.get_cardinal_tiles(focus):  # check for cardinal unrev not checked
+                if np.isnan(cardinal_value) and cardinal_location.values() not in checked_list:
+                    self.new_create_subset_recursion(cardinal_location, valid_list, checked_list)
 
     def create_subset(self, focus):
-
-        # THIS MAY BE RETURNING INCORRECT LOCATIONS SOMETIMES
-
 
         grid_copy = np.copy(self.grid_array)
         valid_list = []
@@ -439,7 +525,7 @@ class MLogicPlugin:
 
         return subset_list  # returns offset (for each) from original subset and the split subsets.
 
-    def magic_of_probability(self, subset):
+    def brute_force_method(self, subset):
         # Handles a subset of the grid. Generates all 2^n, n= # unrevealed tiles possible mine layouts.
         # Validate each layout to determine which ones are possible
         # Find proportion of valid layouts with a mine for each square.
@@ -536,14 +622,25 @@ class MLogicPlugin:
         # return 0 # this shouldnt get hit ever
 
     def random_location(self):
-        rand_location = MCoordinate(random.randint(0, 29), random.randint(0, 15))
-        location_value = self.grid_array[rand_location.values()]
-        if np.isnan(location_value):
-            self.previous_focus = rand_location
-            print(rand_location.values(), "RANDOM RETURN")
-            return rand_location, 'left'
+        unrevealed_locations = []
+        row_num, col_num = np.shape(self.grid_array)
+        for row in range(0, row_num):
+            for column in range(0, col_num):
+                if np.isnan(self.grid_array[row, column]):
+                    unrevealed_locations.append((row, column))
+
+        if unrevealed_locations:
+            rand_number = random.randint(0, len(unrevealed_locations)-1)
+            rand_location = unrevealed_locations[rand_number]
+            m_rand_location = MCoordinate(rand_location[0], rand_location[1])
+            self.previous_focus = m_rand_location
+            print(m_rand_location.values(), "RANDOM RETURN")
+            return m_rand_location, 'left'
+
         else:
-            return self.random_location()
+            print("ERROR: Random return found no unrevealed tiles")
+            print('ERROR RETURN: (0,0)')
+            return MCoordinate(0, 0), 'left'
 
     def get_cardinal_tiles(self, focus):
         surrounding_tiles = []
