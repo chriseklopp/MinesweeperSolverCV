@@ -53,8 +53,8 @@ class MInstanceManager:
             # print("------------------------------------------------------")
             # print("------------------------------------------------------")
 
-    def update_all(self): # updates ALL instances.
-        self.frame_number +=1
+    def update_all(self):  # updates ALL instances.
+        self.frame_number += 1
         if self.instances:
             for instance in self.instances:
                 if not instance.is_complete:

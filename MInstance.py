@@ -15,6 +15,7 @@ from MLogicPlugin import MLogicPlugin
 import time
 import win32api
 import win32con
+from MTileArray import MTileArray
 
 
 class MInstance:
@@ -29,7 +30,7 @@ class MInstance:
                            '6': ([63, 175, 96], [101, 255, 188], [0, 0]),
                            '8': ([0, 101, 144], [37, 255, 202], [1, 1]),
                            '7': ([0, 101, 144], [37, 255, 202], [0, 0]),
-                           '99': ([0, 77, 188], [59, 255, 255], [0, 0]) # FLAG DETECTION SOMETIMES FAILING
+                           '99': ([0, 77, 188], [59, 255, 255], [0, 0])  # FLAG DETECTION SOMETIMES FAILING
                            }
     # feature_definitions = {'1':  ([85, 66, 130], [117, 255, 255], [0, 0])}
     id = 0
@@ -37,8 +38,8 @@ class MInstance:
     def __init__(self, location_tuple):
         # locations (low,high)
         self.my_window_location, self.my_grid_location, self.tile_length = location_tuple
-        self.grid_array = np.empty([30, 16])
-        self.grid_array[:] = np.NaN
+        self.grid_array = MTileArray((30, 16))
+        self.debugarray = self.grid_array.grid_array[:, :, 0].transpose()  # DEBUG PURPOSES
         self.flags = 0
         self.is_complete = False
         self.my_logic_plugin = MLogicPlugin(self.grid_array)
@@ -62,7 +63,7 @@ class MInstance:
             return
         self.update_array(screen_snapshot)  # DEBUG: OLD METHOD ~.32 SEC
 
-        self.debugarray = self.grid_array.transpose()
+        self.debugarray = self.grid_array.grid_array[:, :, 0].transpose()  # DEBUG PURPOSES
 
         k = self.my_logic_plugin.update(self.grid_array)
 
@@ -74,9 +75,9 @@ class MInstance:
         # self.cursor_control((5, 5), 'left')
 
     def reset(self):
-        np.savetxt('lastarray', self.grid_array, delimiter=',')
+        np.savetxt('lastarray', self.grid_array.grid_array[:, :, 0], delimiter=',')
         time.sleep(5)
-        self.grid_array = np.empty([30, 16])
+        self.grid_array = MTileArray((30, 16))
         self.flags = 0
         self.is_complete = False
         self.cursor_control(MCoordinate(0, 0), 'left')  # ensures the correct window is selected
@@ -121,7 +122,7 @@ class MInstance:
         win32api.SetCursorPos((0, 0))
 
     def update_array(self, screen_snapshot):
-
+        new_array = np.zeros((30, 16))
         #  process new screenshot into usable form
         lower_window_coords, upper_window_coords = self.my_window_location
         lower_grid_coords, upper_grid_coords = self.my_grid_location
@@ -161,7 +162,6 @@ class MInstance:
             # cv2.imshow("grid_masks", grid_bw)
             # cv2.waitKey(0)
 
-
         # create mask for empty tile, as its a special case it is separate
 
         lower = np.array([58, 0, 0])
@@ -186,7 +186,7 @@ class MInstance:
                     tile_crop = feature_masks[feature][row * tile_width:x_target, column * tile_height:y_target]
                     match = self._detect_feature(values, tile_crop)
                     if match:
-                        self.grid_array[column, row] = int(feature)
+                        new_array[column, row] = int(feature)
                         end = time.time()
                         break
 
@@ -201,9 +201,10 @@ class MInstance:
                     # tile_bw = cv2.threshold(tile_blur, 50, 255, cv2.THRESH_BINARY)[1]
                     tile_mean = tile_bw.mean()
                     if tile_mean/255 > .95:
-                        self.grid_array[column, row] = int(0)
+                        new_array[column, row] = int(0)
                     else:
-                        self.grid_array[column, row] = np.NaN
+                        new_array[column, row] = np.NaN
+        self.grid_array.update(new_array)
 
     def _detect_window_popup(self, screen_snapshot):  # this would occur on a won or lost game. Must differentiate between win / lose
         lower_window_coords, upper_window_coords = self.my_window_location
