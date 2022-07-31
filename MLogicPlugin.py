@@ -125,7 +125,7 @@ class MLogicPlugin:
                                 break  # look for unsatisfied tile
 
                         # generated_subsets = self.new_create_subset(adj_location)
-                        sub_array = self.create_subarray(adj_location)  # CREATE SUBARRAY FROM A LOCATION STARTING POINT
+                        rel_location, sub_array = self.create_subarray(adj_location)  # CREATE SUBARRAY FROM A LOCATION STARTING POINT
                         subplot_number_unrevealed = np.count_nonzero(np.isnan(sub_array.grid_array[:, :, 0]))
 
                         if subplot_number_unrevealed <= 1:  # protects against a case where theres only 1 tile (should fix this in the generate subset function)
@@ -136,10 +136,10 @@ class MLogicPlugin:
                         offset, probability, action = self.brute_force_method(sub_array)  # RUN BRUTE FORCE METHOD ON IT
 
                         if probability == 1:
-                            print(f"LOCATION: {offset.values()} PROBABILITY: {probability}")
-                            return offset, action
+                            print(f"LOCATION: {(rel_location + offset).values()} PROBABILITY: {probability}")
+                            return rel_location + offset, action
                         else:
-                            section_results.append((offset, probability, action))  # ADD TO RESULTS
+                            section_results.append((rel_location + offset, probability, action))  # ADD TO RESULTS
 
                     else:  # occurs when all possible starting locations have been exhausted.
                         self.previous_focus = focus
@@ -159,32 +159,6 @@ class MLogicPlugin:
         print('ENTERING PART 5')
         print("RANDOM RETURN")
         return self.grid_array.get_random_unrevealed_location(), "left"
-
-    def exceeds_satisfied(self, focus, alternative_grid=None):
-        # similar to the is_satisfied function, but returns true if a tile has more adj mines than its number,
-        # used in the backtracking algorithm.
-        if alternative_grid is None:
-            value = self.grid_array[focus.x, focus.y]
-            surrounding_flags = 0
-            for adjacent_location, adjacent_value in self.get_surrounding_tiles(focus):
-                if adjacent_value == 99:
-                    surrounding_flags += 1
-            if surrounding_flags > value:
-                return True
-            else:
-                return False
-
-        else:
-            value = alternative_grid[focus.x, focus.y]
-            surrounding_flags = 0
-            for adjacent_location, adjacent_value in self.get_surrounding_tiles(focus,
-                                                                                alternative_grid=alternative_grid):
-                if adjacent_value == 99:
-                    surrounding_flags += 1
-            if surrounding_flags > value:
-                return True
-            else:
-                return False
 
     def new_create_subset(self, focus):
 
@@ -319,7 +293,7 @@ class MLogicPlugin:
 
         sub_array = self.clean_subarray(sub_array)
 
-        return sub_array
+        return lower_coordinate_pair, sub_array
 
     @staticmethod
     def clean_subarray(sub_array):
@@ -407,30 +381,30 @@ class MLogicPlugin:
 
         valid_combinations = []
         w, h, d = subarray.shape
+        subarray_proxy = subarray.copy()
 
         number_unrevealed = np.count_nonzero(np.isnan(subarray.grid_array[:, :, 0]))
         unrevealed_locations = np.asarray(np.isnan(subarray.grid_array[:, :, 0])).nonzero()
         print(f"Simulating all {2 ** number_unrevealed} outcomes")
         combinations_list = list(product((0, 1), repeat=number_unrevealed))  # list of all 2^n combinations. list of sets of values
         for combination in combinations_list:
-            is_valid = True
-            combination_grid = subarray.copy()  # THIS IS BAD, PROBABLY WILL HAVE TO RECURSION
+
+            combination_grid = subarray.grid_array[:, :, 0].copy()  # THIS IS BAD, PROBABLY WILL HAVE TO RECURSION
             for i, tile in enumerate(combination):
                 if tile:
-                    combination_grid.grid_array[unrevealed_locations[0][i], unrevealed_locations[1][i], 0] = 99
+                    combination_grid[unrevealed_locations[0][i], unrevealed_locations[1][i]] = 99
 
-            for row in range(0, h):
-                for column in range(0, w):
-                    location = MCoordinate(column, row)
-                    value = combination_grid.grid_array[location.x, location.y, 0]
-                    loc, tile_info = zip(*combination_grid.get_surrounding_tiles(location))
-                    value_vector = np.array(tile_info[0])
-                    adj_unrevealed = np.count_nonzero(np.isnan(value_vector)) + np.count_nonzero(value_vector == 99)
-                    if value and value != 99 and not np.isnan(value) and value <= adj_unrevealed:
-                        if not combination_grid.is_satisfied(location):
-                            is_valid = False
+            subarray_proxy.update(combination_grid)
+            # accept if every nonzero numeric is exactly satisfied.
+            # equivalent: reject if any nonzero numeric are NOT satisfied
+            nonzero = subarray_proxy.grid_array[:, :, 0] > 0
+            nonflag = subarray_proxy.grid_array[:, :, 0] < 99
+            nonzero_numeric = np.logical_and(nonzero, nonflag)
 
-            if is_valid:
+            not_satisfied = subarray_proxy.grid_array[:, :, 0] != subarray_proxy.grid_array[:, :, 1]
+
+            rejectance = np.logical_and(nonzero_numeric, not_satisfied)
+            if not rejectance.any():
                 valid_combinations.append(combination)
 
         valid_combination_array = np.asarray(valid_combinations)

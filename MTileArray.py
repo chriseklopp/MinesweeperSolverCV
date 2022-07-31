@@ -17,7 +17,7 @@ class MTileArray:
         self.grid_array = np.full((dims[0], dims[1], 3), (np.nan, 0, 0))
         self.shape = self.grid_array.shape
         self.examined_array = np.full(dims, False)
-        self.debugarray = self.grid_array[:,:,0]
+        self.debugarray = self.grid_array[:, :, 0]
         # set of tiles that were modified in the previous update,helps logic plugin find useful moves more efficiently
         self.tile_hints = set()
 
@@ -87,7 +87,7 @@ class MTileArray:
         return True if self.examined_array[location.values()] else False
 
     def get_unexamined_tile(self, allow_satisfied=False):
-        # returns the first unexamined numeric tile
+        # returns the first unexamined non-zero numeric tile
         # if none found returns none, YOU MUST CHECK FOR THIS
         """
         This should theoretically be slower than looping through the array to find the first unexamined
@@ -99,15 +99,14 @@ class MTileArray:
         conditional_array = self.examined_array == False
         if not allow_satisfied:
             unsatisfied_indices = self.grid_array[:, :, 0] != self.grid_array[:, :, 1]
-            #unsatisfied_indices = np.where(self.grid_array[:, :, 0] != self.grid_array[:, :, 1])
             conditional_array = np.logical_and(conditional_array, unsatisfied_indices)
 
-        # exclude tiles with flags or unrevealed tiles
-        non_flags = self.grid_array[:, :, 0] != 99  # TODO: I HOPE THIS ISNT WRONG
-        non_unrevealed = ~np.isnan(self.grid_array[:, :, 0])
-        numeric_tiles = np.logical_and(non_flags, non_unrevealed)
+        # exclude tiles with flags or unrevealed tiles, or zero
+        nonzero = self.grid_array[:, :, 0] > 0
+        nonflag = self.grid_array[:, :, 0] < 99
+        nonzero_numeric = np.logical_and(nonzero, nonflag)
 
-        conditional_array = np.logical_and(conditional_array, numeric_tiles)
+        conditional_array = np.logical_and(conditional_array, nonzero_numeric)
 
         desired_indices = np.argwhere(conditional_array == True)
         if desired_indices.any():
@@ -145,8 +144,17 @@ class MTileArray:
 
         self.reset_examined_tiles()
         my_value_array = self.grid_array[:, :, 0]
+        nans_diff = ~(np.isnan(snapshot_array) == np.isnan(my_value_array))
+
+        # numerics only
+        my_value_array_numerics = np.logical_and(my_value_array > 0, my_value_array < 99)
+        snapshot_array_numerics = np.logical_and(snapshot_array > 0, snapshot_array < 99)
+
+        diff_values = my_value_array_numerics != snapshot_array_numerics
+        diff_values_final = np.logical_or(diff_values, nans_diff)
+
+        diff_indices = np.argwhere(diff_values_final)
         self.grid_array[:, :, 0] = snapshot_array
-        diff_indices = np.argwhere(snapshot_array != my_value_array)
 
         # Update tiles that were directly changed
         adj_indices = set()
@@ -191,7 +199,7 @@ class MTileArray:
         w = bottomright.x - topleft.x
         h = bottomright.y - topleft.y
         aslice = MTileArray((w, h))
-        aslice.grid_array = self.grid_array[topleft.x:bottomright.x, topleft.y:bottomright.y, :]
+        aslice.grid_array = self.grid_array[topleft.x:bottomright.x, topleft.y:bottomright.y, :].copy()
         aslice.debugarray = aslice.grid_array[:, :, 0]
         return aslice
 
@@ -200,7 +208,7 @@ class MTileArray:
         w, h, d = self.shape
 
         acopy = MTileArray((w, h))
-        acopy.grid_array = self.grid_array[0:w, 0:h, :]
+        acopy.grid_array = self.grid_array[0:w, 0:h, :].copy()
         acopy.debugarray = acopy.grid_array[:, :, 0]
         return acopy
 
