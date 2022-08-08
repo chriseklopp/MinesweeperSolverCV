@@ -65,9 +65,10 @@ class MInstance:
 
         self.debugarray = self.grid_array.grid_array[:, :, 0].transpose()  # DEBUG PURPOSES
 
-        k = self.my_logic_plugin.update(self.grid_array)
+        results = self.my_logic_plugin.update(self.grid_array)
+        for k in results:
+            self.cursor_control(k[0], k[1])
 
-        self.cursor_control(k[0], k[1])
         end = cv2.getTickCount()
         total = (end - start) / cv2.getTickFrequency()
         total
@@ -97,12 +98,12 @@ class MInstance:
 
         if action == 'left':
             win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x_target, y_target, 0, 0)
-            time.sleep(.01)
+            time.sleep(.005)
             win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x_target, y_target, 0, 0)
 
         elif action == 'right':
             win32api.mouse_event(win32con.MOUSEEVENTF_RIGHTDOWN, x_target, y_target, 0, 0)
-            time.sleep(.01)
+            time.sleep(.005)
             win32api.mouse_event(win32con.MOUSEEVENTF_RIGHTUP, x_target, y_target, 0, 0)
 
         elif action == 'double_left':

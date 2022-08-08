@@ -5,7 +5,7 @@ Takes in board information and returns an action and a location
 Though this was originally just a function, it has been made a class to make it easier to act upon previous moves
 Having this isolated from the rest of the code allows for increased readability and allows for implementation of new
 solving logic without breaking and other parts of the code
-This class can have whatever you want in it as long as it contains an update function that returns (location, action)
+This class can have whatever you want in it as long as it contains an update function that returns list(location, action)
 
 WANT:
 - goes down the list in order. if one is true it will start over.
@@ -49,8 +49,8 @@ class MLogicPlugin:
 
         self.grid_array = grid_array
         focus = self.previous_focus
-        location, action = self.logic_flow(focus)
-        return location, action
+        actionlist = self.logic_flow(focus)
+        return actionlist
 
     def logic_flow(self, focus):  # this function is recursive
 
@@ -76,7 +76,7 @@ class MLogicPlugin:
                     if np.isnan(tile_info[0]):
                         print(location.values(), "RULE1 RETURN", tile_info[0])
                         self.previous_focus = focus
-                        return location, 'right'
+                        return [(location, 'right')]
 
         # "RULE 2"
         else:
@@ -84,7 +84,7 @@ class MLogicPlugin:
                 if np.isnan(tile_info[0]):
                     print(focus.values(), "RULE2 RETURN")
                     self.previous_focus = focus
-                    return focus, 'double_left'
+                    return [(focus, 'double_left')]  # TODO: IS THIS RIGHT???
 
                     # print(location.values(), "RULE2 RETURN")
                     # self.previous_focus = focus
@@ -133,13 +133,20 @@ class MLogicPlugin:
 
                         # offset, probability, action = self.backtracking_method(subplot)
                         # print(result)
-                        offset, probability, action = self.brute_force_method(sub_array)  # RUN BRUTE FORCE METHOD ON IT
+                        bf_list = self.brute_force_method(sub_array)  # RUN BRUTE FORCE METHOD ON IT
 
-                        if probability == 1:
-                            print(f"LOCATION: {(rel_location + offset).values()} PROBABILITY: {probability}")
-                            return rel_location + offset, action
+                        if len(bf_list) > 1 or bf_list[0][1] == 1:
+
+                            rem_prob = []
+                            for item in bf_list:
+                                os, prob, act = item
+                                rem_prob.append((rel_location + os, act))
+                            print(f"Return guaranteed list of length {len(rem_prob)}")
+                            return rem_prob
+
                         else:
-                            section_results.append((rel_location + offset, probability, action))  # ADD TO RESULTS
+                            os, prob, act = bf_list[0]
+                            section_results.append((rel_location + os, prob, act))  # ADD TO RESULTS
 
                     else:  # occurs when all possible starting locations have been exhausted.
                         self.previous_focus = focus
@@ -152,13 +159,13 @@ class MLogicPlugin:
                         print("UN-GUARANTEED MOVE")
                         print(f"POSSIBLE MOVES: {len(probability)}")
                         print(f"LOCATION: {sub_plot_location[max_index].values()} PROBABILITY: {max_probability}")
-                        return sub_plot_location[max_index], action[max_index]
+                        return [(sub_plot_location[max_index], action[max_index])]
 
                 # cv2.waitKey(0)
         #  ##### PART 5) #####
         print('ENTERING PART 5')
         print("RANDOM RETURN")
-        return self.grid_array.get_random_unrevealed_location(), "left"
+        return [(self.grid_array.get_random_unrevealed_location(), "left")]
 
     def new_create_subset(self, focus):
 
@@ -315,7 +322,7 @@ class MLogicPlugin:
         return sub_array  # return  cleaned sub array
 
     @staticmethod
-    def split_subset(subset):
+    def split_subarray(sub_array):
         subset_list = []
         row_num, col_num = np.shape(subset)
         if row_num % 2 != 0:
@@ -362,11 +369,10 @@ class MLogicPlugin:
             subset_list.append((MCoordinate(0, 0), left_subplot))
             subset_list.append((MCoordinate(0, int(col_num / 2)), right_subplot))
 
-
         return subset_list  # returns offset (for each) from original subset and the split subsets.
 
     @staticmethod
-    def brute_force_method(subarray):  # TODO: Update this function.
+    def brute_force_method(subarray):  # TODO: ALLOW MULTIPLE RETURNS FROM ONE BRUTE FORCE.
         # Handles a subarray of the grid. Generates all 2^n, n= # unrevealed tiles possible mine layouts.
         # Validate each layout to determine which ones are possible
         # Find proportion of valid layouts with a mine for each square.
@@ -411,29 +417,33 @@ class MLogicPlugin:
         column_sums = valid_combination_array.sum(axis=0)
         column_proportions = column_sums/len(valid_combination_array)
 
-        max_value = np.max(column_proportions)
-        max_value_position = np.argmax(column_proportions)
+        one_locs = np.argwhere(column_proportions == 1)
+        zero_locs = np.argwhere(column_proportions == 0)
+        return_locs = []
+
+        for loc in one_locs:
+            location = MCoordinate(unrevealed_locations[0][loc[0]],
+                                   unrevealed_locations[1][loc[0]])
+            return_locs.append((location, 1, 'right'))
+
+        for loc in zero_locs:
+            location = MCoordinate(unrevealed_locations[0][loc[0]],
+                                   unrevealed_locations[1][loc[0]])
+            return_locs.append((location, 1, 'left'))
+
+        if return_locs:
+            return return_locs
+
+        # max_value = np.max(column_proportions)
+        # max_value_position = np.argmax(column_proportions)
 
         min_value = np.min(column_proportions)
         min_value_position = np.argmin(column_proportions)
 
-        if np.isnan(min_value) or np.isnan(max_value):
-            print("POOPOO")
-
-        if min_value == 0:
-            location = MCoordinate(unrevealed_locations[0][min_value_position],
-                                   unrevealed_locations[1][min_value_position])
-
-            print(f"PROB: {1-min_value}")
-            return location, 1-min_value, 'left'
-
-        if max_value == 1:
-            location = MCoordinate(unrevealed_locations[0][max_value_position],
-                                   unrevealed_locations[1][max_value_position])
-            print(f"PROB: {max_value}")
-            return location, max_value, 'right'
+        # if np.isnan(min_value) or np.isnan(max_value):
+        #     print("POOPOO")
 
         location = MCoordinate(unrevealed_locations[0][min_value_position],
                                unrevealed_locations[1][min_value_position])
         print(f"PROB: {1-min_value}")
-        return location, 1-min_value, 'left'
+        return [(location, 1-min_value, 'left')]
