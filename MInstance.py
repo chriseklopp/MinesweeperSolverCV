@@ -204,7 +204,7 @@ class MInstance:
                     if tile_mean/255 > .95:
                         new_array[column, row] = int(0)
                     else:
-                        new_array[column, row] = np.NaN
+                        new_array[column, row] = 77
         self.grid_array.update(new_array)
 
     def _detect_window_popup(self, screen_snapshot):  # this would occur on a won or lost game. Must differentiate between win / lose

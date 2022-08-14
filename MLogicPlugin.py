@@ -61,7 +61,7 @@ class MLogicPlugin:
             print("BAD THING HAPPEN")
 
         #  ##### PART 0) #####
-        if not focus_value or focus_value == 99 or np.isnan(focus_value):  # if not nonzero numeric focus
+        if not focus_value or focus_value == 99 or focus_value == 77:  # if not nonzero numeric focus
             if self.grid_array.tile_hints:
                 location = self.grid_array.tile_hints.pop()
                 if location:
@@ -73,7 +73,7 @@ class MLogicPlugin:
 
             if (focus_value - focus_satisfaction) == focus_adj_unrevealed:
                 for location, tile_info in focus_surrounding_tiles:
-                    if np.isnan(tile_info[0]):
+                    if tile_info[0] == 77:
                         print(location.values(), "RULE1 RETURN", tile_info[0])
                         self.previous_focus = focus
                         return [(location, 'right')]
@@ -81,7 +81,7 @@ class MLogicPlugin:
         # "RULE 2"
         else:
             for location, tile_info in focus_surrounding_tiles:
-                if np.isnan(tile_info[0]):
+                if tile_info[0] == 77:
                     print(focus.values(), "RULE2 RETURN")
                     self.previous_focus = focus
                     return [(focus, 'double_left')]  # TODO: IS THIS RIGHT???
@@ -92,7 +92,7 @@ class MLogicPlugin:
 
         #  ##### PART 2) #####
         for location, tile_info in focus_surrounding_tiles:
-            if (tile_info[0] and not np.isnan(tile_info[0]) and
+            if (tile_info[0] and tile_info[0] != 77 and
                     tile_info[0] != 99 and not self.grid_array.is_examined(location)):
                 return self.logic_flow(location)
 
@@ -101,8 +101,8 @@ class MLogicPlugin:
 
         while self.grid_array.tile_hints:
             search_loc = self.grid_array.tile_hints.pop()  # type: tuple
-            if search_loc and self.grid_array.grid_array[search_loc[0], search_loc[1], 0] != 99 and not \
-                    np.isnan(self.grid_array.grid_array[search_loc[0], search_loc[1], 0]):
+            if search_loc and self.grid_array.grid_array[search_loc[0], search_loc[1], 0] != 99 and\
+                    self.grid_array.grid_array[search_loc[0], search_loc[1], 0] != 77:
                 return self.logic_flow(MCoordinate(search_loc[0], search_loc[1]))
         # B)
         search_loc = self.grid_array.get_unexamined_tile(allow_satisfied=True)  # type: MCoordinate
@@ -114,20 +114,19 @@ class MLogicPlugin:
 
             self.grid_array.reset_examined_tiles()  # reset examined array to false
             section_results = []
-            if not np.isnan(focus_value):
+            if focus_value != 77:
                 while True:
                     location = self.grid_array.get_unexamined_tile(allow_satisfied=False)
                     if location and not self.grid_array.is_satisfied(location):
                         self.grid_array.examine_tile(location)
                         location_surrounding_tiles = self.grid_array.get_surrounding_tiles(location)
                         for adj_location, tile_info in location_surrounding_tiles:
-                            if np.isnan(tile_info[0]):
+                            if tile_info[0] == 77:
                                 break  # look for unsatisfied tile
 
                         # generated_subsets = self.new_create_subset(adj_location)
                         rel_location, sub_array = self.create_subarray(adj_location)  # CREATE SUBARRAY FROM A LOCATION STARTING POINT
-                        subplot_number_unrevealed = np.count_nonzero(np.isnan(sub_array.grid_array[:, :, 0]))
-
+                        subplot_number_unrevealed = np.count_nonzero(sub_array.grid_array[:, :, 0] == 77)
                         if subplot_number_unrevealed <= 1:  # protects against a case where theres only 1 tile (should fix this in the generate subset function)
                             continue
 
@@ -238,7 +237,7 @@ class MLogicPlugin:
 
         if flag_adj < adj_num:  # only chain to the next if it has more than 1 numeric adjacent.
             for cardinal_location, cardinal_value in self.get_cardinal_tiles(focus):  # check for cardinal unrev not checked
-                if np.isnan(cardinal_value) and cardinal_location.values() not in checked_list:
+                if cardinal_value == 77 and cardinal_location.values() not in checked_list:
                     self.new_create_subset_recursion(cardinal_location, valid_list, checked_list)
 
     def create_subarray(self, focus):
@@ -258,14 +257,14 @@ class MLogicPlugin:
 
             number_nonzero = 0
             for adj_locations, adj_tile_info in grid_copy.get_surrounding_tiles(m_location):
-                if 1 <= adj_tile_info[0] < 99:
+                if 1 <= adj_tile_info[0] < 77:
                     number_nonzero += 1
                     break
 
             if number_nonzero:  # if location has a numeric adjacent
                 valid_set.add(m_location.values())
                 for cardinal_location, cardinal_value in grid_copy.get_cardinal_tiles(m_location):
-                    if np.isnan(cardinal_value[0]) and cardinal_location.values() not in checked_set:
+                    if cardinal_value[0] == 77 and cardinal_location.values() not in checked_set:
                         unchecked_set.add(cardinal_location.values())
 
         tile_set = valid_set.copy()  # adds locations of all adjacent numeric values surrounding the unrevealed tiles.
@@ -280,7 +279,7 @@ class MLogicPlugin:
         for location in tile_set:
             m_location = MCoordinate(location[0], location[1])
             location_value = grid_copy.grid_array[m_location.values()]
-            if 1 <= location_value[0] < 10 and not np.isnan(location_value[0]):
+            if 1 <= location_value[0] < 10 and location_value[0] != 77:
                 for adj_location, adj_tile_info in grid_copy.get_surrounding_tiles(m_location):
                     if adj_location.values() not in final_tile_set:
                         if 1 <= adj_tile_info[0] < 10:
@@ -312,11 +311,11 @@ class MLogicPlugin:
 
                 number_nonzero = 0
                 for surrounding_tiles, surrounding_tile_info in sub_array.get_surrounding_tiles(location):
-                    if 1 <= surrounding_tile_info[0] < 99:
+                    if 1 <= surrounding_tile_info[0] < 77:
                         number_nonzero += 1
                         break
 
-                if np.isnan(value) and not number_nonzero:
+                if value != 77 and not number_nonzero:
                     sub_array.grid_array[location.x, location.y, 0] = 0
 
         return sub_array  # return  cleaned sub array
@@ -389,8 +388,8 @@ class MLogicPlugin:
         w, h, d = subarray.shape
         subarray_proxy = subarray.copy()
 
-        number_unrevealed = np.count_nonzero(np.isnan(subarray.grid_array[:, :, 0]))
-        unrevealed_locations = np.asarray(np.isnan(subarray.grid_array[:, :, 0])).nonzero()
+        number_unrevealed = np.count_nonzero(subarray.grid_array[:, :, 0] == 77)
+        unrevealed_locations = np.asarray(subarray.grid_array[:, :, 0] == 77).nonzero()
         print(f"Simulating all {2 ** number_unrevealed} outcomes")
         combinations_list = list(product((0, 1), repeat=number_unrevealed))  # list of all 2^n combinations. list of sets of values
         for combination in combinations_list:
@@ -404,7 +403,7 @@ class MLogicPlugin:
             # accept if every nonzero numeric is exactly satisfied.
             # equivalent: reject if any nonzero numeric are NOT satisfied
             nonzero = subarray_proxy.grid_array[:, :, 0] > 0
-            nonflag = subarray_proxy.grid_array[:, :, 0] < 99
+            nonflag = subarray_proxy.grid_array[:, :, 0] < 77
             nonzero_numeric = np.logical_and(nonzero, nonflag)
 
             not_satisfied = subarray_proxy.grid_array[:, :, 0] != subarray_proxy.grid_array[:, :, 1]
@@ -440,8 +439,8 @@ class MLogicPlugin:
         min_value = np.min(column_proportions)
         min_value_position = np.argmin(column_proportions)
 
-        # if np.isnan(min_value) or np.isnan(max_value):
-        #     print("POOPOO")
+       # if np.isnan(min_value) or np.isnan(max_value):
+           #]]]] print("POOPOO")
 
         location = MCoordinate(unrevealed_locations[0][min_value_position],
                                unrevealed_locations[1][min_value_position])

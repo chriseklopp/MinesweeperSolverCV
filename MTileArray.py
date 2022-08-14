@@ -14,7 +14,7 @@ class MTileArray:
     def __init__(self, dims: tuple):
 
         # (value, satisfaction, adjacent_unrevealed)
-        self.grid_array = np.full((dims[0], dims[1], 3), (np.nan, 0, 0))
+        self.grid_array = np.full((dims[0], dims[1], 3), (77, 0, 0))
         self.shape = self.grid_array.shape
         self.examined_array = np.full(dims, False)
         self.debugarray = self.grid_array[:, :, 0]
@@ -103,7 +103,7 @@ class MTileArray:
 
         # exclude tiles with flags or unrevealed tiles, or zero
         nonzero = self.grid_array[:, :, 0] > 0
-        nonflag = self.grid_array[:, :, 0] < 99
+        nonflag = self.grid_array[:, :, 0] < 77
         nonzero_numeric = np.logical_and(nonzero, nonflag)
 
         conditional_array = np.logical_and(conditional_array, nonzero_numeric)
@@ -126,7 +126,7 @@ class MTileArray:
         #  returns random unrevealed location, usually first move or last ditch effort
         # if no unrevealed_location found (how???) returns (0,0)
 
-        unrevealed_locations = np.argwhere(np.isnan(self.grid_array[:, :, 0]))  # this may break lol
+        unrevealed_locations = np.argwhere(self.grid_array[:, :, 0] == 77)  # this may break lol
 
         if unrevealed_locations.any():
             rand_number = random.randint(0, len(unrevealed_locations)-1)
@@ -144,16 +144,15 @@ class MTileArray:
 
         self.reset_examined_tiles()
         my_value_array = self.grid_array[:, :, 0]
-        nans_diff = ~(np.isnan(snapshot_array) == np.isnan(my_value_array))
 
         # numerics only
-        my_value_array_numerics = np.logical_and(my_value_array > 0, my_value_array < 99)
-        snapshot_array_numerics = np.logical_and(snapshot_array > 0, snapshot_array < 99)
+        diff_values = my_value_array != snapshot_array
+        #my_value_array_numerics = np.logical_and(my_value_array > 0, my_value_array < 99)
+        #snapshot_array_numerics = np.logical_and(snapshot_array > 0, snapshot_array < 99)
 
-        diff_values = my_value_array_numerics != snapshot_array_numerics
-        diff_values_final = np.logical_or(diff_values, nans_diff)
+        #diff_values = my_value_array_numerics != snapshot_array_numerics
 
-        diff_indices = np.argwhere(diff_values_final)
+        diff_indices = np.argwhere(diff_values)
         self.grid_array[:, :, 0] = snapshot_array
 
         # Update tiles that were directly changed
@@ -169,7 +168,7 @@ class MTileArray:
             for location, tile_info in surrounding_tiles:
                 adj_indices.add(location.values())
 
-                if np.isnan(tile_info[0]):
+                if tile_info[0] == 77:
                     adjacent_unrevealed += 1
                 elif tile_info[0] == 99:
                     adjacent_flags += 1
@@ -184,7 +183,7 @@ class MTileArray:
             adjacent_unrevealed = 0
 
             for location, tile_info in surrounding_tiles:
-                if np.isnan(tile_info[0]):
+                if tile_info[0] == 77:
                     adjacent_unrevealed += 1
                 elif tile_info[0] == 99:
                     adjacent_flags += 1
