@@ -315,7 +315,7 @@ class MLogicPlugin:
                         number_nonzero += 1
                         break
 
-                if value != 77 and not number_nonzero:
+                if value == 77 and not number_nonzero:
                     sub_array.grid_array[location.x, location.y, 0] = 0
 
         return sub_array  # return  cleaned sub array
@@ -323,50 +323,52 @@ class MLogicPlugin:
     @staticmethod
     def split_subarray(sub_array):
         subset_list = []
-        row_num, col_num = np.shape(subset)
-        if row_num % 2 != 0:
-            row_num += 1
-        if col_num % 2 != 0:
-            col_num += 1
+        #row_num, col_num = np.shape(subset)
+        w, h, d = sub_array.shape
 
-        left_subplot = subset[:, :int(col_num / 2)]
-        right_subplot = subset[:, int(col_num / 2):]
-        upper_subplot = subset[:int(row_num / 2), :]
-        lower_subplot = subset[int(row_num / 2):, :]
+        if w % 2 != 0:
+            w += 1
+        if h % 2 != 0:
+            h += 1
 
-        left_number_unrevealed = np.count_nonzero(np.isnan(left_subplot))
-        right_number_unrevealed = np.count_nonzero(np.isnan(right_subplot))
-        upper_number_unrevealed = np.count_nonzero(np.isnan(upper_subplot))
-        lower_number_unrevealed = np.count_nonzero(np.isnan(lower_subplot))
+        left_subplot = sub_array.grid_array[:, :int(h / 2), 0]
+        right_subplot = sub_array.grid_array[:, int(h / 2):, 0]
+        upper_subplot = sub_array.grid_array[:int(w / 2), :, 0]
+        lower_subplot = sub_array.grid_array[int(w / 2):, :, 0]
+
+        left_number_unrevealed = np.count_nonzero(left_subplot == 77)
+        right_number_unrevealed = np.count_nonzero(left_subplot == 77)
+        upper_number_unrevealed = np.count_nonzero(left_subplot == 77)
+        lower_number_unrevealed = np.count_nonzero(left_subplot == 77)
 
         lr_magnitude = abs(left_number_unrevealed - right_number_unrevealed)
         ul_magnitude = abs(upper_number_unrevealed - lower_number_unrevealed)
 
         if lr_magnitude > ul_magnitude:
 
-            upper_mask = (upper_subplot >= 1) & (upper_subplot < 99)
+            upper_mask = (upper_subplot >= 1) & (upper_subplot < 77)
             upper_mask_slice = upper_mask[-1, :]
             upper_subplot[-1, :][upper_mask_slice] = 0
 
-            lower_mask = (lower_subplot >= 1) & (lower_subplot < 99)
+            lower_mask = (lower_subplot >= 1) & (lower_subplot < 77)
             lower_mask_slice = lower_mask[0, :]
             lower_subplot[0, :][lower_mask_slice] = 0
 
             subset_list.append((MCoordinate(0, 0), upper_subplot))
-            subset_list.append((MCoordinate(int(row_num / 2), 0), lower_subplot))
+            subset_list.append((MCoordinate(int(w / 2), 0), lower_subplot))
 
         else:
 
-            left_mask = (left_subplot >= 1) & (left_subplot < 99)
+            left_mask = (left_subplot >= 1) & (left_subplot < 77)
             left_mask_slice = left_mask[:, -1]
             left_subplot[:, -1][left_mask_slice] = 0
 
-            right_mask = (right_subplot >= 1) & (right_subplot < 99)
+            right_mask = (right_subplot >= 1) & (right_subplot < 77)
             right_mask_slice = right_mask[:, 0]
             right_subplot[:, 0][right_mask_slice] = 0
 
             subset_list.append((MCoordinate(0, 0), left_subplot))
-            subset_list.append((MCoordinate(0, int(col_num / 2)), right_subplot))
+            subset_list.append((MCoordinate(0, int(h / 2)), right_subplot))
 
         return subset_list  # returns offset (for each) from original subset and the split subsets.
 
