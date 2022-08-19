@@ -1,5 +1,5 @@
 """
-MCoordinate is a container for coordinates (X,Y).
+MCoordinate is a container for coordinates. NO FRAME OF REFERENCE GUARANTEED
 Can be added or subtracted to/from other objects of the same time
 Cuts down on the amount of nested indexing required
 MCoordinate knows no distinction between pixel coordinates, and array coordinates. So it is up to the user to ensure
@@ -21,8 +21,8 @@ class MCoordinate:
         return MCoordinate(x, y)
 
     def __sub__(self, other):
-        x = self.x - other.y
-        y = self.x - other.y
+        x = self.x - other.x
+        y = self.y - other.y
         return MCoordinate(x, y)
 
     def values(self):

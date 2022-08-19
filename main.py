@@ -9,9 +9,6 @@ Record Starting Position
     """
 
 
-
-
-
 import cv2
 import numpy as np
 import random
@@ -44,6 +41,7 @@ def main():
         print("frame: ", manager.frame_number)
         print("-------------------------")
         print()
+
 
 if __name__ == "__main__":
     # cProfile.run(main())
