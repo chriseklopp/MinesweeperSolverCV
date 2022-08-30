@@ -25,7 +25,7 @@ import random
 import time
 import copy
 import numpy as np
-from MCoordinate import MCoordinate
+from MArrayCoordinate import MArrayCoordinate
 import cv2
 from itertools import product
 from MTileArray import MTileArray
@@ -41,7 +41,7 @@ class MLogicPlugin:
         self.bombs_remaining = 99
         self.grid_array = grid_array
 
-        self.previous_focus = MCoordinate(0, 0)
+        self.previous_focus = MArrayCoordinate(0, 0)
         self.crop_handler_unchecked = []
         self.crop_handler_checked = []
         self.crop_handler_counter = 0
@@ -66,7 +66,7 @@ class MLogicPlugin:
             if self.grid_array.tile_hints:
                 location = self.grid_array.tile_hints.pop()
                 if location:
-                    return self.logic_flow(MCoordinate(location[0], location[1]))
+                    return self.logic_flow(MArrayCoordinate(location))
 
         #  ##### PART 1) #####
         # "RULE 1"
@@ -75,7 +75,7 @@ class MLogicPlugin:
             if (focus_value - focus_satisfaction) == focus_adj_unrevealed:
                 for location, tile_info in focus_surrounding_tiles:
                     if tile_info[0] == 77:
-                        print(location.values(), "RULE1 RETURN", tile_info[0])
+                        print(location, "RULE1 RETURN", tile_info[0])
                         self.previous_focus = focus
                         return [(location, 'right')]
 
@@ -83,7 +83,7 @@ class MLogicPlugin:
         else:
             for location, tile_info in focus_surrounding_tiles:
                 if tile_info[0] == 77:
-                    print(focus.values(), "RULE2 RETURN")
+                    print(focus, "RULE2 RETURN")
                     self.previous_focus = focus
                     return [(focus, 'double_left')]  # TODO: IS THIS RIGHT???
 
@@ -104,7 +104,7 @@ class MLogicPlugin:
             search_loc = self.grid_array.tile_hints.pop()  # type: tuple
             if search_loc and self.grid_array.grid_array[search_loc[0], search_loc[1], 0] != 99 and\
                     self.grid_array.grid_array[search_loc[0], search_loc[1], 0] != 77:
-                return self.logic_flow(MCoordinate(search_loc[0], search_loc[1]))
+                return self.logic_flow(MArrayCoordinate(search_loc))
         # B)
         search_loc = self.grid_array.get_unexamined_tile(allow_satisfied=True)  # type: MCoordinate
         if search_loc:
@@ -183,14 +183,14 @@ class MLogicPlugin:
 
         numerics_list = []
         for location in valid_list:  # populate list of adj, numeric locations
-            m_location = MCoordinate(location[0], location[1])
+            m_location = MArrayCoordinate(location[0], location[1])
             for adj_location, adj_value in self.get_surrounding_tiles(m_location):
                 if 1 <= adj_value < 10:
                     numerics_list.append(adj_location.values())
 
         accessory_list = []
         for location in numerics_list:  # populate list of adj locations (zeroing out numeric)
-            m_location = MCoordinate(location[0], location[1])
+            m_location = MArrayCoordinate(location[0], location[1])
             for adj_location, adj_value in self.get_surrounding_tiles(m_location):
                 if adj_location.values() in numerics_list or adj_location.values() in valid_list:   # skip values already in our list.
                     continue
@@ -208,8 +208,8 @@ class MLogicPlugin:
             x_values.append(location[0])
             y_values.append(location[1])
 
-        lower_coordinate_pair = MCoordinate(min(x_values), min(y_values))
-        upper_coordinate_pair = MCoordinate(max(x_values), max(y_values))
+        lower_coordinate_pair = MArrayCoordinate(min(x_values), min(y_values))
+        upper_coordinate_pair = MArrayCoordinate(max(x_values), max(y_values))
         subset = grid_copy[lower_coordinate_pair.x:upper_coordinate_pair.x + 1,
                            lower_coordinate_pair.y:upper_coordinate_pair.y + 1]
 
@@ -259,8 +259,8 @@ class MLogicPlugin:
 
         while unchecked_set:  # creates LIST of all relevant unrevealed tiles.
             location = unchecked_set.pop()
-            m_location = MCoordinate(location[0], location[1])
-            checked_set.add(m_location.values())
+            m_location = MArrayCoordinate(location)
+            checked_set.add(location)
 
             number_nonzero = 0
             for adj_locations, adj_tile_info in grid_copy.get_surrounding_tiles(m_location):
@@ -276,32 +276,32 @@ class MLogicPlugin:
 
         tile_set = valid_set.copy()  # adds locations of all adjacent numeric values surrounding the unrevealed tiles.
         for location in valid_set:
-            m_location = MCoordinate(location[0], location[1])
-            location_value = grid_copy.grid_array[m_location.values()]
+            m_location = MArrayCoordinate(location)
+            #location_value = grid_copy.grid_array[m_location.values()]
             for adj_location, adj_tile_info in grid_copy.get_surrounding_tiles(m_location):
                 if adj_location.values() not in tile_set and 1 <= adj_tile_info[0] < 10:
                     tile_set.add(adj_location.values())
 
         final_tile_set = tile_set.copy()  # adds all adj tiles to listed numerics, and sets any new numeric to 0
         for location in tile_set:
-            m_location = MCoordinate(location[0], location[1])
+            m_location = MArrayCoordinate(location)
             location_value = grid_copy.grid_array[m_location.values()]
             if 1 <= location_value[0] < 10 and location_value[0] != 77:
                 for adj_location, adj_tile_info in grid_copy.get_surrounding_tiles(m_location):
                     if adj_location.values() not in final_tile_set:
                         if 1 <= adj_tile_info[0] < 10:
-                            grid_copy.grid_array[adj_location.x, adj_location.y,0] = 0
+                            grid_copy.grid_array[adj_location.i, adj_location.j, 0] = 0
                         final_tile_set.add(adj_location.values())
 
-        x_values = []
-        y_values = []
+        i_values = []
+        j_values = []
         for location in final_tile_set:
-            self.grid_array.examine_tile(MCoordinate(location[0], location[1]))
-            x_values.append(location[0])
-            y_values.append(location[1])
+            self.grid_array.examine_tile(MArrayCoordinate(location))
+            i_values.append(location[0])
+            j_values.append(location[1])
 
-        lower_coordinate_pair = MCoordinate(min(x_values), min(y_values))
-        upper_coordinate_pair = MCoordinate(max(x_values)+1, max(y_values)+1)
+        lower_coordinate_pair = MArrayCoordinate(min(i_values), min(j_values))
+        upper_coordinate_pair = MArrayCoordinate(max(i_values)+1, max(j_values)+1)
         sub_array = grid_copy.slice_copy(lower_coordinate_pair, upper_coordinate_pair, fix_sat=True)
         sub_array = self.clean_subarray(sub_array)
         sub_array_number_unrevealed = np.count_nonzero(sub_array.grid_array[:, :, 0] == 77)
@@ -317,14 +317,14 @@ class MLogicPlugin:
 
     @staticmethod
     def clean_subarray(sub_array):
-        w, h, d = sub_array.shape
+        h, w, d = sub_array.shape
 
         # Any unrevealed not adjacent to a nonzero numeric is set to 0
         num_locs = set()
-        for row in range(0, h):
-            for column in range(0, w):
-                location = MCoordinate(column, row)
-                value = sub_array.grid_array[location.x, location.y, 0]
+        for i in range(0, h):
+            for j in range(0, w):
+                location = MArrayCoordinate(i, j)
+                value = sub_array.grid_array[location.i, location.j, 0]
 
                 if 1 <= value < 77:
                     num_locs.add(location.values())
@@ -337,24 +337,24 @@ class MLogicPlugin:
                         break
 
                 if value == 77 and not number_nonzero:
-                    sub_array.grid_array[location.x, location.y, 0] = 0
+                    sub_array.grid_array[location.i, location.j, 0] = 0
 
         # Any numerics not adjacent to an unrevealed tile are set to 0
         for loc in num_locs:
-            m_loc = MCoordinate(loc[0], loc[1])
+            m_loc = MArrayCoordinate(loc)
             adjacent_unrevealed = 0
             for surrounding_tiles, surrounding_tile_info in sub_array.get_surrounding_tiles(m_loc):
                 if surrounding_tile_info[0] == 77:
                     adjacent_unrevealed += 1
 
-            if 1 <= sub_array.grid_array[m_loc.x, m_loc.y, 0] < 77 and not adjacent_unrevealed:
-                sub_array.grid_array[m_loc.x, m_loc.y, 0] = 0
+            if 1 <= sub_array.grid_array[m_loc.i, m_loc.j, 0] < 77 and not adjacent_unrevealed:
+                sub_array.grid_array[m_loc.i, m_loc.j, 0] = 0
 
         return sub_array  # return  cleaned sub array
 
     def split_subarray(self, sub_array):
 
-        width, height, d = sub_array.shape
+        height, width, d = sub_array.shape
 
         w = width
         h = height
@@ -364,11 +364,11 @@ class MLogicPlugin:
         if h % 2 != 0:
             h += 1
 
-        upper_subplot = sub_array.grid_array[:, :int(h / 2), 0]
-        lower_subplot = sub_array.grid_array[:, int(h / 2):, 0]
+        upper_subplot = sub_array.grid_array[:int(h / 2), :, 0]
+        lower_subplot = sub_array.grid_array[int(h / 2):, :, 0]
 
-        left_subplot = sub_array.grid_array[:int(w / 2), :, 0]
-        right_subplot = sub_array.grid_array[int(w / 2):, :, 0]
+        left_subplot = sub_array.grid_array[:, int(w / 2), 0]
+        right_subplot = sub_array.grid_array[:, int(w / 2):, 0]
 
         left_number_unrevealed = np.count_nonzero(left_subplot == 77)
         right_number_unrevealed = np.count_nonzero(right_subplot == 77)
@@ -382,34 +382,33 @@ class MLogicPlugin:
         # TODO: WHAT THE MC. F*CK IS HAPPENING HERE, FIX THE GRID TRANSPOSITION AND THEN FIX THIS GARBAGE
         if lr_magnitude > ul_magnitude:
             print("LU SPLIT")
-            upper_slice = sub_array.slice_copy(MCoordinate(0, 0), MCoordinate(width, int(h / 2)), fix_sat=True)
+            upper_slice = sub_array.slice_copy(MArrayCoordinate(0, 0), MArrayCoordinate(int(h / 2), width), fix_sat=True)
             upper_mask = (upper_slice.grid_array[:, :, 0] >= 1) & (upper_slice.grid_array[:, :, 0] < 77)
             upper_slice.grid_array[:, -1, 0][upper_mask[:, -1]] = 0
             upper_slice = self.clean_subarray(upper_slice)
 
-            lower_slice = sub_array.slice_copy(MCoordinate(0, int(h / 2)), MCoordinate(width, height), fix_sat=True)
+            lower_slice = sub_array.slice_copy(MArrayCoordinate(int(h / 2), 0), MArrayCoordinate(height, width), fix_sat=True)
             lower_mask = (lower_slice.grid_array[:, :, 0] >= 1) & (lower_slice.grid_array[:, :, 0] < 77)
             lower_slice.grid_array[:, 0, 0][lower_mask[:, 0]] = 0
             lower_slice = self.clean_subarray(lower_slice)
 
-            subset_list.append((MCoordinate(0, 0), upper_slice))
-            subset_list.append((MCoordinate(int(height / 2), 0), lower_slice))
+            subset_list.append((MArrayCoordinate(0, 0), upper_slice))
+            subset_list.append((MArrayCoordinate(int(height / 2), 0), lower_slice))
 
         else:
             print("LR SPLIT")
-            left_slice = sub_array.slice_copy(MCoordinate(0, 0), MCoordinate(int(w / 2), height), fix_sat=True)
+            left_slice = sub_array.slice_copy(MArrayCoordinate(0, 0), MArrayCoordinate(height, int(w / 2)), fix_sat=True)
             left_mask = (left_slice.grid_array[:, :, 0] >= 1) & (left_slice.grid_array[:, :, 0] < 77)
             left_slice.grid_array[-1, :, 0][left_mask[-1, :]] = 0
             left_slice = self.clean_subarray(left_slice)
 
-            right_slice = sub_array.slice_copy(MCoordinate(int(w / 2), 0), MCoordinate(width, height), fix_sat=True)
+            right_slice = sub_array.slice_copy(MArrayCoordinate(0, int(w / 2)), MArrayCoordinate(height, width), fix_sat=True)
             right_mask = (right_slice.grid_array[:, :, 0] >= 1) & (right_slice.grid_array[:, :, 0] < 77)
             right_slice.grid_array[0, :, 0][right_mask[0, :]] = 0
             right_slice = self.clean_subarray(right_slice)
 
-
-            subset_list.append((MCoordinate(0, 0), left_slice))
-            subset_list.append((MCoordinate(0, int(width / 2)), right_slice))
+            subset_list.append((MArrayCoordinate(0, 0), left_slice))
+            subset_list.append((MArrayCoordinate(0, int(width / 2)), right_slice))
 
         return subset_list  # returns offset (for each) from original subset and the split subsets.
 
@@ -428,7 +427,7 @@ class MLogicPlugin:
         # 'CLEAN GRID"
 
         valid_combinations = []
-        w, h, d = subarray.shape
+        h, w, d = subarray.shape
         subarray_proxy = subarray.copy()
 
         number_unrevealed = np.count_nonzero(subarray.grid_array[:, :, 0] == 77)
@@ -467,13 +466,13 @@ class MLogicPlugin:
         return_locs = []
 
         for loc in one_locs:
-            location = MCoordinate(unrevealed_locations[0][loc[0]],
-                                   unrevealed_locations[1][loc[0]])
+            location = MArrayCoordinate(unrevealed_locations[0][loc[0]],
+                                   unrevealed_locations[1][loc[0]])  # THIS MAY BE WRONG NOW
             return_locs.append((location, 1, 'right'))
 
         for loc in zero_locs:
-            location = MCoordinate(unrevealed_locations[0][loc[0]],
-                                   unrevealed_locations[1][loc[0]])
+            location = MArrayCoordinate(unrevealed_locations[0][loc[0]],
+                                   unrevealed_locations[1][loc[0]])  # THIS MAY BE WRONG NOW
             return_locs.append((location, 1, 'left'))
 
         if return_locs:
@@ -488,7 +487,7 @@ class MLogicPlugin:
         if np.isnan(min_value) or np.isnan(max_value):
             print("WHY IS PROB NAN!?!?")
 
-        location = MCoordinate(unrevealed_locations[0][min_value_position],
+        location = MArrayCoordinate(unrevealed_locations[0][min_value_position],
                                unrevealed_locations[1][min_value_position])
         print(f"PROB: {1-min_value}")
         return [(location, 1-min_value, 'left')]
