@@ -23,6 +23,7 @@ and Enumerate section and run Simulation on area. Make a probabilistic mine sele
 
 import random
 import time
+import copy
 import numpy as np
 from MCoordinate import MCoordinate
 import cv2
@@ -125,27 +126,30 @@ class MLogicPlugin:
                                 break  # look for unsatisfied tile
 
                         # generated_subsets = self.new_create_subset(adj_location)
-                        rel_location, sub_array = self.create_subarray(adj_location)  # CREATE SUBARRAY FROM A LOCATION STARTING POINT
-                        subplot_number_unrevealed = np.count_nonzero(sub_array.grid_array[:, :, 0] == 77)
-                        if subplot_number_unrevealed <= 1:  # protects against a case where theres only 1 tile (should fix this in the generate subset function)
-                            continue
+                        #rel_location, sub_array
+                        subarray_list = self.create_subarray(adj_location)  # CREATE SUBARRAY FROM A LOCATION STARTING POINT
+                        for sub in subarray_list:
+                            rel_location, sub_array = sub
+                            subplot_number_unrevealed = np.count_nonzero(sub_array.grid_array[:, :, 0] == 77)
+                            if subplot_number_unrevealed <= 1:  # protects against a case where theres only 1 tile (should fix this in the generate subset function)
+                                continue
 
-                        # offset, probability, action = self.backtracking_method(subplot)
-                        # print(result)
-                        bf_list = self.brute_force_method(sub_array)  # RUN BRUTE FORCE METHOD ON IT
+                            # offset, probability, action = self.backtracking_method(subplot)
+                            # print(result)
+                            bf_list = self.brute_force_method(sub_array)  # RUN BRUTE FORCE METHOD ON IT
 
-                        if len(bf_list) > 1 or bf_list[0][1] == 1:
+                            if len(bf_list) > 1 or bf_list[0][1] == 1:
 
-                            rem_prob = []
-                            for item in bf_list:
-                                os, prob, act = item
-                                rem_prob.append((rel_location + os, act))
-                            print(f"Return guaranteed list of length {len(rem_prob)}")
-                            return rem_prob
+                                rem_prob = []
+                                for item in bf_list:
+                                    os, prob, act = item
+                                    rem_prob.append((rel_location + os, act))
+                                print(f"Return guaranteed list of length {len(rem_prob)}")
+                                return rem_prob
 
-                        else:
-                            os, prob, act = bf_list[0]
-                            section_results.append((rel_location + os, prob, act))  # ADD TO RESULTS
+                            else:
+                                os, prob, act = bf_list[0]
+                                section_results.append((rel_location + os, prob, act))  # ADD TO RESULTS
 
                     else:  # occurs when all possible starting locations have been exhausted.
                         self.previous_focus = focus
@@ -153,9 +157,11 @@ class MLogicPlugin:
                             print("ERROR. NO SUBARRAYS WERE CREATED.")
                             break
                         sub_plot_location, probability, action = zip(*section_results)
-                        max_probability = max(probability)
+                        max_probability = np.nanmax(probability)
                         max_index = probability.index(max_probability)
                         print("UN-GUARANTEED MOVE")
+                        if np.isnan(max_probability):
+                            print("NOW THIS IS VERY BAD")
                         print(f"POSSIBLE MOVES: {len(probability)}")
                         print(f"LOCATION: {sub_plot_location[max_index].values()} PROBABILITY: {max_probability}")
                         return [(sub_plot_location[max_index], action[max_index])]
@@ -244,6 +250,7 @@ class MLogicPlugin:
 
         grid_copy = self.grid_array.copy()
 
+
         valid_set = set()
 
         unchecked_set = set()
@@ -283,7 +290,7 @@ class MLogicPlugin:
                 for adj_location, adj_tile_info in grid_copy.get_surrounding_tiles(m_location):
                     if adj_location.values() not in final_tile_set:
                         if 1 <= adj_tile_info[0] < 10:
-                            grid_copy.grid_array[adj_location.x,adj_location.y,0] = 0
+                            grid_copy.grid_array[adj_location.x, adj_location.y,0] = 0
                         final_tile_set.add(adj_location.values())
 
         x_values = []
@@ -295,19 +302,33 @@ class MLogicPlugin:
 
         lower_coordinate_pair = MCoordinate(min(x_values), min(y_values))
         upper_coordinate_pair = MCoordinate(max(x_values)+1, max(y_values)+1)
-        sub_array = grid_copy.slice_copy(lower_coordinate_pair, upper_coordinate_pair)
-
+        sub_array = grid_copy.slice_copy(lower_coordinate_pair, upper_coordinate_pair, fix_sat=True)
         sub_array = self.clean_subarray(sub_array)
+        sub_array_number_unrevealed = np.count_nonzero(sub_array.grid_array[:, :, 0] == 77)
+        if sub_array_number_unrevealed > 16:
+            print("SPLITTING ARRAY")
+            split_list = self.split_subarray(sub_array)
+            if split_list:
+                for i in range(len(split_list)):
+                    split_list[i] = (split_list[i][0] + lower_coordinate_pair, split_list[i][1])
+                return split_list
 
-        return lower_coordinate_pair, sub_array
+        return [(lower_coordinate_pair, sub_array)]
 
     @staticmethod
     def clean_subarray(sub_array):
         w, h, d = sub_array.shape
+
+        # Any unrevealed not adjacent to a nonzero numeric is set to 0
+        num_locs = set()
         for row in range(0, h):
             for column in range(0, w):
                 location = MCoordinate(column, row)
                 value = sub_array.grid_array[location.x, location.y, 0]
+
+                if 1 <= value < 77:
+                    num_locs.add(location.values())
+                    continue
 
                 number_nonzero = 0
                 for surrounding_tiles, surrounding_tile_info in sub_array.get_surrounding_tiles(location):
@@ -318,57 +339,77 @@ class MLogicPlugin:
                 if value == 77 and not number_nonzero:
                     sub_array.grid_array[location.x, location.y, 0] = 0
 
+        # Any numerics not adjacent to an unrevealed tile are set to 0
+        for loc in num_locs:
+            m_loc = MCoordinate(loc[0], loc[1])
+            adjacent_unrevealed = 0
+            for surrounding_tiles, surrounding_tile_info in sub_array.get_surrounding_tiles(m_loc):
+                if surrounding_tile_info[0] == 77:
+                    adjacent_unrevealed += 1
+
+            if 1 <= sub_array.grid_array[m_loc.x, m_loc.y, 0] < 77 and not adjacent_unrevealed:
+                sub_array.grid_array[m_loc.x, m_loc.y, 0] = 0
+
         return sub_array  # return  cleaned sub array
 
-    @staticmethod
-    def split_subarray(sub_array):
-        subset_list = []
-        #row_num, col_num = np.shape(subset)
-        w, h, d = sub_array.shape
+    def split_subarray(self, sub_array):
+
+        width, height, d = sub_array.shape
+
+        w = width
+        h = height
 
         if w % 2 != 0:
             w += 1
         if h % 2 != 0:
             h += 1
 
-        left_subplot = sub_array.grid_array[:, :int(h / 2), 0]
-        right_subplot = sub_array.grid_array[:, int(h / 2):, 0]
-        upper_subplot = sub_array.grid_array[:int(w / 2), :, 0]
-        lower_subplot = sub_array.grid_array[int(w / 2):, :, 0]
+        upper_subplot = sub_array.grid_array[:, :int(h / 2), 0]
+        lower_subplot = sub_array.grid_array[:, int(h / 2):, 0]
+
+        left_subplot = sub_array.grid_array[:int(w / 2), :, 0]
+        right_subplot = sub_array.grid_array[int(w / 2):, :, 0]
 
         left_number_unrevealed = np.count_nonzero(left_subplot == 77)
-        right_number_unrevealed = np.count_nonzero(left_subplot == 77)
-        upper_number_unrevealed = np.count_nonzero(left_subplot == 77)
-        lower_number_unrevealed = np.count_nonzero(left_subplot == 77)
+        right_number_unrevealed = np.count_nonzero(right_subplot == 77)
+        upper_number_unrevealed = np.count_nonzero(upper_subplot == 77)
+        lower_number_unrevealed = np.count_nonzero(lower_subplot == 77)
 
         lr_magnitude = abs(left_number_unrevealed - right_number_unrevealed)
         ul_magnitude = abs(upper_number_unrevealed - lower_number_unrevealed)
 
+        subset_list = []
+        # TODO: WHAT THE MC. F*CK IS HAPPENING HERE, FIX THE GRID TRANSPOSITION AND THEN FIX THIS GARBAGE
         if lr_magnitude > ul_magnitude:
+            print("LU SPLIT")
+            upper_slice = sub_array.slice_copy(MCoordinate(0, 0), MCoordinate(width, int(h / 2)), fix_sat=True)
+            upper_mask = (upper_slice.grid_array[:, :, 0] >= 1) & (upper_slice.grid_array[:, :, 0] < 77)
+            upper_slice.grid_array[:, -1, 0][upper_mask[:, -1]] = 0
+            upper_slice = self.clean_subarray(upper_slice)
 
-            upper_mask = (upper_subplot >= 1) & (upper_subplot < 77)
-            upper_mask_slice = upper_mask[-1, :]
-            upper_subplot[-1, :][upper_mask_slice] = 0
+            lower_slice = sub_array.slice_copy(MCoordinate(0, int(h / 2)), MCoordinate(width, height), fix_sat=True)
+            lower_mask = (lower_slice.grid_array[:, :, 0] >= 1) & (lower_slice.grid_array[:, :, 0] < 77)
+            lower_slice.grid_array[:, 0, 0][lower_mask[:, 0]] = 0
+            lower_slice = self.clean_subarray(lower_slice)
 
-            lower_mask = (lower_subplot >= 1) & (lower_subplot < 77)
-            lower_mask_slice = lower_mask[0, :]
-            lower_subplot[0, :][lower_mask_slice] = 0
-
-            subset_list.append((MCoordinate(0, 0), upper_subplot))
-            subset_list.append((MCoordinate(int(w / 2), 0), lower_subplot))
+            subset_list.append((MCoordinate(0, 0), upper_slice))
+            subset_list.append((MCoordinate(int(height / 2), 0), lower_slice))
 
         else:
+            print("LR SPLIT")
+            left_slice = sub_array.slice_copy(MCoordinate(0, 0), MCoordinate(int(w / 2), height), fix_sat=True)
+            left_mask = (left_slice.grid_array[:, :, 0] >= 1) & (left_slice.grid_array[:, :, 0] < 77)
+            left_slice.grid_array[-1, :, 0][left_mask[-1, :]] = 0
+            left_slice = self.clean_subarray(left_slice)
 
-            left_mask = (left_subplot >= 1) & (left_subplot < 77)
-            left_mask_slice = left_mask[:, -1]
-            left_subplot[:, -1][left_mask_slice] = 0
+            right_slice = sub_array.slice_copy(MCoordinate(int(w / 2), 0), MCoordinate(width, height), fix_sat=True)
+            right_mask = (right_slice.grid_array[:, :, 0] >= 1) & (right_slice.grid_array[:, :, 0] < 77)
+            right_slice.grid_array[0, :, 0][right_mask[0, :]] = 0
+            right_slice = self.clean_subarray(right_slice)
 
-            right_mask = (right_subplot >= 1) & (right_subplot < 77)
-            right_mask_slice = right_mask[:, 0]
-            right_subplot[:, 0][right_mask_slice] = 0
 
-            subset_list.append((MCoordinate(0, 0), left_subplot))
-            subset_list.append((MCoordinate(0, int(h / 2)), right_subplot))
+            subset_list.append((MCoordinate(0, 0), left_slice))
+            subset_list.append((MCoordinate(0, int(width / 2)), right_slice))
 
         return subset_list  # returns offset (for each) from original subset and the split subsets.
 
@@ -407,6 +448,9 @@ class MLogicPlugin:
             nonzero = subarray_proxy.grid_array[:, :, 0] > 0
             nonflag = subarray_proxy.grid_array[:, :, 0] < 77
             nonzero_numeric = np.logical_and(nonzero, nonflag)
+            DEBUG1 = subarray_proxy.grid_array[:, :, 0]
+            DEBUG2 = subarray_proxy.grid_array[:, :, 1]
+            DEBUG3 = subarray_proxy.grid_array[:, :, 0] - subarray_proxy.grid_array[:, :, 1]
 
             not_satisfied = subarray_proxy.grid_array[:, :, 0] != subarray_proxy.grid_array[:, :, 1]
 
@@ -435,14 +479,14 @@ class MLogicPlugin:
         if return_locs:
             return return_locs
 
-        # max_value = np.max(column_proportions)
-        # max_value_position = np.argmax(column_proportions)
+        max_value = np.max(column_proportions)
+        max_value_position = np.argmax(column_proportions)
 
         min_value = np.min(column_proportions)
         min_value_position = np.argmin(column_proportions)
 
-       # if np.isnan(min_value) or np.isnan(max_value):
-           #]]]] print("POOPOO")
+        if np.isnan(min_value) or np.isnan(max_value):
+            print("WHY IS PROB NAN!?!?")
 
         location = MCoordinate(unrevealed_locations[0][min_value_position],
                                unrevealed_locations[1][min_value_position])

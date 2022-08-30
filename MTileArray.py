@@ -18,6 +18,8 @@ class MTileArray:
         self.shape = self.grid_array.shape
         self.examined_array = np.full(dims, False)
         self.debugarray = self.grid_array[:, :, 0]
+        self.is_fixed_satisfaction = False
+        self.fixed_satisfaction = np.full((dims[0], dims[1]), 0)
         # set of tiles that were modified in the previous update,helps logic plugin find useful moves more efficiently
         self.tile_hints = set()
 
@@ -137,6 +139,45 @@ class MTileArray:
         else:
             return MCoordinate(0, 0)  # type: MCoordinate
 
+    def set_fixed_satisfaction(self):
+        # Saves the adjacent mines of edge numerics of subarrays so that when it gets chopped they can still "remember"
+        # that they were partially satisfied.
+        # this CANNOT be disabled on an array so it should only be called on a subarray or everything will explode
+        # Any COPY of an array with this enabled will also have it enabled.
+        # fixed_sat = curr_sat - sliced_sat
+        self.is_fixed_satisfaction = True
+
+        w, h, d = self.shape
+        borders = np.full((w, h), False)
+        borders[-1, :] = True
+        borders[0, :] = True
+        borders[:, -1] = True
+        borders[:, 0] = True
+        non_borders = ~borders
+        old_satisfaction = self.grid_array[:, :, 1].copy()
+
+        # We need to refresh the edges of our array now to determine which flags we've lost.
+        # TODO: Change this to just edges for speeeeeed boost.
+        for i in range(0,w):
+            for j in range(0,h):
+                coord_location = MCoordinate(i, j)
+                surrounding_tiles = self.get_surrounding_tiles(coord_location)
+                adjacent_flags = 0
+                adjacent_unrevealed = 0
+                for location, tile_info in surrounding_tiles:
+                    if tile_info[0] == 77:
+                        adjacent_unrevealed += 1
+                    elif tile_info[0] == 99:
+                        adjacent_flags += 1
+                self.grid_array[coord_location.x, coord_location.y, 1] = adjacent_flags
+                self.grid_array[coord_location.x, coord_location.y, 2] = adjacent_unrevealed
+
+        sliced_satisfaction = self.grid_array[:, :, 1]
+        # Find difference
+        self.fixed_satisfaction = old_satisfaction - sliced_satisfaction
+        # Ignore where it doesn't matter
+        self.fixed_satisfaction[non_borders] = 0
+
     def update(self, snapshot_array: np.array):
         # Receives a np array of np.numerics parsed from a screenshot.
         # This function determines which values have changed in game and updates them in the grid array
@@ -172,7 +213,7 @@ class MTileArray:
                     adjacent_unrevealed += 1
                 elif tile_info[0] == 99:
                     adjacent_flags += 1
-            self.grid_array[coord_location.x, coord_location.y, 1] = adjacent_flags
+            self.grid_array[coord_location.x, coord_location.y, 1] = adjacent_flags + self.fixed_satisfaction[coord_location.x, coord_location.y]
             self.grid_array[coord_location.x, coord_location.y, 2] = adjacent_unrevealed
 
         # Update any adjacent tiles to those that were changed.
@@ -187,28 +228,38 @@ class MTileArray:
                     adjacent_unrevealed += 1
                 elif tile_info[0] == 99:
                     adjacent_flags += 1
-            self.grid_array[coord_location.x, coord_location.y, 1] = adjacent_flags
+            self.grid_array[coord_location.x, coord_location.y, 1] = adjacent_flags + self.fixed_satisfaction[coord_location.x, coord_location.y]
             self.grid_array[coord_location.x, coord_location.y, 2] = adjacent_unrevealed
 
         self.tile_hints = og_indices.union(adj_indices)
         self.debugarray = self.grid_array[:, :, 0]
 
-    def slice_copy(self, topleft: MCoordinate, bottomright: MCoordinate):
+        # if self.is_fixed_satisfaction:
+        #     self.grid_array[:, :, 1] += self.fixed_satisfaction
+
+    def slice_copy(self, topleft: MCoordinate, bottomright: MCoordinate, fix_sat=False):
         # Slice this array object to the given coordinates and return a copy
         w = bottomright.x - topleft.x
         h = bottomright.y - topleft.y
         aslice = MTileArray((w, h))
         aslice.grid_array = self.grid_array[topleft.x:bottomright.x, topleft.y:bottomright.y, :].copy()
         aslice.debugarray = aslice.grid_array[:, :, 0]
+        if fix_sat:
+            aslice.set_fixed_satisfaction()
         return aslice
 
     def copy(self):
         # return a copy of this array object
         w, h, d = self.shape
 
-        acopy = MTileArray((w, h))
+        acopy = MTileArray((w,h))
         acopy.grid_array = self.grid_array[0:w, 0:h, :].copy()
         acopy.debugarray = acopy.grid_array[:, :, 0]
+
+        if self.is_fixed_satisfaction:
+            acopy.fixed_satisfaction = self.fixed_satisfaction
+            acopy.is_fixed_satisfaction = True
+
         return acopy
 
 
