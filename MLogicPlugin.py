@@ -20,7 +20,6 @@ and Enumerate section and run Simulation on area. Make a probabilistic mine sele
 (marked EXIT, allow potentially escaping the recursive loop and return an action)
 """
 
-
 import random
 import time
 import copy
@@ -31,6 +30,7 @@ from itertools import product
 from MTileArray import MTileArray
 
 import sys
+
 rec_limit = 1500
 sys.setrecursionlimit(rec_limit)
 
@@ -73,11 +73,13 @@ class MLogicPlugin:
         if not self.grid_array.is_satisfied(focus):
 
             if (focus_value - focus_satisfaction) == focus_adj_unrevealed:
+                unrevealed = []
                 for location, tile_info in focus_surrounding_tiles:
                     if tile_info[0] == 77:
-                        print(location, "RULE1 RETURN", tile_info[0])
-                        self.previous_focus = focus
-                        return [(location, 'right')]
+                        unrevealed.append((location, 'right'))
+                self.previous_focus = focus
+                print(f"RULE1 RETURN. Size: {len(unrevealed)}", tile_info[0])
+                return unrevealed
 
         # "RULE 2"
         else:
@@ -102,7 +104,7 @@ class MLogicPlugin:
 
         while self.grid_array.tile_hints:
             search_loc = self.grid_array.tile_hints.pop()  # type: tuple
-            if search_loc and self.grid_array.grid_array[search_loc[0], search_loc[1], 0] != 99 and\
+            if search_loc and self.grid_array.grid_array[search_loc[0], search_loc[1], 0] != 99 and \
                     self.grid_array.grid_array[search_loc[0], search_loc[1], 0] != 77:
                 return self.logic_flow(MArrayCoordinate(search_loc))
         # B)
@@ -115,56 +117,61 @@ class MLogicPlugin:
 
             self.grid_array.reset_examined_tiles()  # reset examined array to false
             section_results = []
-            if focus_value != 77:
-                while True:
-                    location = self.grid_array.get_unexamined_tile(allow_satisfied=False)
-                    if location and not self.grid_array.is_satisfied(location):
-                        self.grid_array.examine_tile(location)
-                        location_surrounding_tiles = self.grid_array.get_surrounding_tiles(location)
-                        for adj_location, tile_info in location_surrounding_tiles:
-                            if tile_info[0] == 77:
-                                break  # look for unsatisfied tile
+            #if focus_value != 77:
+            while True:
+                location = self.grid_array.get_unexamined_tile(allow_satisfied=False)
+                if location and not self.grid_array.is_satisfied(location):
+                    self.grid_array.examine_tile(location)
+                    location_surrounding_tiles = self.grid_array.get_surrounding_tiles(location)
+                    for adj_location, tile_info in location_surrounding_tiles:
+                        if tile_info[0] == 77:
+                            break  # look for unsatisfied tile
 
-                        # generated_subsets = self.new_create_subset(adj_location)
-                        #rel_location, sub_array
-                        subarray_list = self.create_subarray(adj_location)  # CREATE SUBARRAY FROM A LOCATION STARTING POINT
-                        for sub in subarray_list:
-                            rel_location, sub_array = sub
-                            subplot_number_unrevealed = np.count_nonzero(sub_array.grid_array[:, :, 0] == 77)
-                            if subplot_number_unrevealed <= 1:  # protects against a case where theres only 1 tile (should fix this in the generate subset function)
-                                continue
+                    # generated_subsets = self.new_create_subset(adj_location)
+                    # rel_location, sub_array
+                    subarray_list = self.create_subarray(
+                        adj_location)  # CREATE SUBARRAY FROM A LOCATION STARTING POINT
+                    for sub in subarray_list:
+                        rel_location, sub_array = sub
+                        subplot_number_unrevealed = np.count_nonzero(sub_array.grid_array[:, :, 0] == 77)
+                        if subplot_number_unrevealed <= 1:  # protects against a case where theres only 1 tile (should fix this in the generate subset function)
+                            continue
 
-                            # offset, probability, action = self.backtracking_method(subplot)
-                            # print(result)
-                            bf_list = self.brute_force_method(sub_array)  # RUN BRUTE FORCE METHOD ON IT
+                        # offset, probability, action = self.backtracking_method(subplot)
+                        # print(result)
+                        #bf_list = self.backtracking_method(sub_array)
+                        bf_list = self.brute_force_method(sub_array)  # RUN BRUTE FORCE METHOD ON IT
 
-                            if len(bf_list) > 1 or bf_list[0][1] == 1:
+                        if len(bf_list) > 1 or bf_list[0][1] == 1:
 
-                                rem_prob = []
-                                for item in bf_list:
-                                    os, prob, act = item
-                                    rem_prob.append((rel_location + os, act))
-                                print(f"Return guaranteed list of length {len(rem_prob)}")
-                                return rem_prob
+                            rem_prob = []
+                            for item in bf_list:
+                                os, prob, act = item
+                                rem_prob.append((rel_location + os, act))
+                            print(f"Return guaranteed list of length {len(rem_prob)}")
+                            return rem_prob
 
-                            else:
-                                os, prob, act = bf_list[0]
-                                section_results.append((rel_location + os, prob, act))  # ADD TO RESULTS
+                        else:
+                            os, prob, act = bf_list[0]
+                            section_results.append((rel_location + os, prob, act))  # ADD TO RESULTS
 
-                    else:  # occurs when all possible starting locations have been exhausted.
-                        self.previous_focus = focus
-                        if not section_results:
-                            print("ERROR. NO SUBARRAYS WERE CREATED.")
-                            break
-                        sub_plot_location, probability, action = zip(*section_results)
-                        max_probability = np.nanmax(probability)
-                        max_index = probability.index(max_probability)
-                        print("UN-GUARANTEED MOVE")
-                        if np.isnan(max_probability):
-                            print("NOW THIS IS VERY BAD")
-                        print(f"POSSIBLE MOVES: {len(probability)}")
-                        print(f"LOCATION: {sub_plot_location[max_index].values()} PROBABILITY: {max_probability}")
-                        return [(sub_plot_location[max_index], action[max_index])]
+                else:  # occurs when all possible starting locations have been exhausted.
+                    self.previous_focus = focus
+                    if not section_results:
+                        print("ERROR. NO SUBARRAYS WERE CREATED.")
+                        break
+                    sub_plot_location, probability, action = zip(*section_results)
+                    max_probability = np.nanmax(probability)
+                    if np.isnan(max_probability):
+                        print("NAN PROBABILITY, this is probably not good..")
+                        print("RANDOM RETURN")
+                        return [(self.grid_array.get_random_unrevealed_location(), "left")]
+                    max_index = probability.index(max_probability)
+                    print("UN-GUARANTEED MOVE")
+
+                    print(f"POSSIBLE MOVES: {len(probability)}")
+                    print(f"LOCATION: {sub_plot_location[max_index].values()} PROBABILITY: {max_probability}")
+                    return [(sub_plot_location[max_index], action[max_index])]
 
                 # cv2.waitKey(0)
         #  ##### PART 5) #####
@@ -192,7 +199,7 @@ class MLogicPlugin:
         for location in numerics_list:  # populate list of adj locations (zeroing out numeric)
             m_location = MArrayCoordinate(location[0], location[1])
             for adj_location, adj_value in self.get_surrounding_tiles(m_location):
-                if adj_location.values() in numerics_list or adj_location.values() in valid_list:   # skip values already in our list.
+                if adj_location.values() in numerics_list or adj_location.values() in valid_list:  # skip values already in our list.
                     continue
 
                 accessory_list.append(adj_location.values())
@@ -211,7 +218,7 @@ class MLogicPlugin:
         lower_coordinate_pair = MArrayCoordinate(min(x_values), min(y_values))
         upper_coordinate_pair = MArrayCoordinate(max(x_values), max(y_values))
         subset = grid_copy[lower_coordinate_pair.x:upper_coordinate_pair.x + 1,
-                           lower_coordinate_pair.y:upper_coordinate_pair.y + 1]
+                 lower_coordinate_pair.y:upper_coordinate_pair.y + 1]
 
         adjusted_tile_list = []
         for tile in final_tile_list:
@@ -242,14 +249,14 @@ class MLogicPlugin:
                 adj_num += 1
 
         if flag_adj < adj_num:  # only chain to the next if it has more than 1 numeric adjacent.
-            for cardinal_location, cardinal_value in self.get_cardinal_tiles(focus):  # check for cardinal unrev not checked
+            for cardinal_location, cardinal_value in self.get_cardinal_tiles(
+                    focus):  # check for cardinal unrev not checked
                 if cardinal_value == 77 and cardinal_location.values() not in checked_list:
                     self.new_create_subset_recursion(cardinal_location, valid_list, checked_list)
 
     def create_subarray(self, focus):
 
         grid_copy = self.grid_array.copy()
-
 
         valid_set = set()
 
@@ -277,7 +284,7 @@ class MLogicPlugin:
         tile_set = valid_set.copy()  # adds locations of all adjacent numeric values surrounding the unrevealed tiles.
         for location in valid_set:
             m_location = MArrayCoordinate(location)
-            #location_value = grid_copy.grid_array[m_location.values()]
+            # location_value = grid_copy.grid_array[m_location.values()]
             for adj_location, adj_tile_info in grid_copy.get_surrounding_tiles(m_location):
                 if adj_location.values() not in tile_set and 1 <= adj_tile_info[0] < 10:
                     tile_set.add(adj_location.values())
@@ -301,17 +308,20 @@ class MLogicPlugin:
             j_values.append(location[1])
 
         lower_coordinate_pair = MArrayCoordinate(min(i_values), min(j_values))
-        upper_coordinate_pair = MArrayCoordinate(max(i_values)+1, max(j_values)+1)
+        upper_coordinate_pair = MArrayCoordinate(max(i_values) + 1, max(j_values) + 1)
         sub_array = grid_copy.slice_copy(lower_coordinate_pair, upper_coordinate_pair, fix_sat=True)
         sub_array = self.clean_subarray(sub_array)
         sub_array_number_unrevealed = np.count_nonzero(sub_array.grid_array[:, :, 0] == 77)
-        if sub_array_number_unrevealed > 16:
+        if sub_array_number_unrevealed > 15:
             print("SPLITTING ARRAY")
             split_list = self.split_subarray(sub_array)
             if split_list:
                 for i in range(len(split_list)):
-                    split_list[i] = (split_list[i][0] + lower_coordinate_pair, split_list[i][1])
-                return split_list
+                    split_list[i][0] += lower_coordinate_pair
+
+                # for i in range(len(split_list)):
+                #     split_list[i] = (split_list[i][0] + lower_coordinate_pair, split_list[i][1])
+            return split_list
 
         return [(lower_coordinate_pair, sub_array)]
 
@@ -355,7 +365,7 @@ class MLogicPlugin:
     def split_subarray(self, sub_array):
 
         height, width, d = sub_array.shape
-
+        subset_list = []
         w = width
         h = height
 
@@ -363,57 +373,74 @@ class MLogicPlugin:
             w += 1
         if h % 2 != 0:
             h += 1
+        unrevealed = (sub_array.grid_array[:, :, 0] == 77)
+        number_unrevealed = np.count_nonzero(unrevealed)
+        col_sums = np.sum(unrevealed, axis=0)
+        row_sums = np.sum(unrevealed, axis=1)
 
-        upper_subplot = sub_array.grid_array[:int(h / 2), :, 0]
-        lower_subplot = sub_array.grid_array[int(h / 2):, :, 0]
+        if max(col_sums) > max(row_sums):
+            print("horizontal split")
+            mines = 0
+            r = 0
+            for r in range(number_unrevealed):
+                mines += row_sums[r]
+                if mines >= number_unrevealed//2:
+                    break
 
-        left_subplot = sub_array.grid_array[:, int(w / 2), 0]
-        right_subplot = sub_array.grid_array[:, int(w / 2):, 0]
+            upper = sub_array.slice_copy(MArrayCoordinate(0, 0), MArrayCoordinate(r, width), fix_sat=True)
+            upper_mask = (upper.grid_array[:, :, 0] >= 1) & (upper.grid_array[:, :, 0] < 77)
+            upper.grid_array[-1, :, 0][upper_mask[-1, :]] = 0
+            upper = self.clean_subarray(upper)
 
-        left_number_unrevealed = np.count_nonzero(left_subplot == 77)
-        right_number_unrevealed = np.count_nonzero(right_subplot == 77)
-        upper_number_unrevealed = np.count_nonzero(upper_subplot == 77)
-        lower_number_unrevealed = np.count_nonzero(lower_subplot == 77)
 
-        lr_magnitude = abs(left_number_unrevealed - right_number_unrevealed)
-        ul_magnitude = abs(upper_number_unrevealed - lower_number_unrevealed)
+            lower = sub_array.slice_copy(MArrayCoordinate(r, 0), MArrayCoordinate(height, width), fix_sat=True)
+            lower_mask = (lower.grid_array[:, :, 0] >= 1) & (lower.grid_array[:, :, 0] < 77)
+            lower.grid_array[0, :, 0][lower_mask[0, :]] = 0
+            lower = self.clean_subarray(lower)
 
-        subset_list = []
-        # TODO: WHAT THE MC. F*CK IS HAPPENING HERE, FIX THE GRID TRANSPOSITION AND THEN FIX THIS GARBAGE
-        if lr_magnitude > ul_magnitude:
-            print("LU SPLIT")
-            upper_slice = sub_array.slice_copy(MArrayCoordinate(0, 0), MArrayCoordinate(int(h / 2), width), fix_sat=True)
-            upper_mask = (upper_slice.grid_array[:, :, 0] >= 1) & (upper_slice.grid_array[:, :, 0] < 77)
-            upper_slice.grid_array[:, -1, 0][upper_mask[:, -1]] = 0
-            upper_slice = self.clean_subarray(upper_slice)
-
-            lower_slice = sub_array.slice_copy(MArrayCoordinate(int(h / 2), 0), MArrayCoordinate(height, width), fix_sat=True)
-            lower_mask = (lower_slice.grid_array[:, :, 0] >= 1) & (lower_slice.grid_array[:, :, 0] < 77)
-            lower_slice.grid_array[:, 0, 0][lower_mask[:, 0]] = 0
-            lower_slice = self.clean_subarray(lower_slice)
-
-            subset_list.append((MArrayCoordinate(0, 0), upper_slice))
-            subset_list.append((MArrayCoordinate(int(height / 2), 0), lower_slice))
+            subset_list.append([MArrayCoordinate(0, 0), upper])
+            subset_list.append([MArrayCoordinate(r, 0), lower])
 
         else:
-            print("LR SPLIT")
-            left_slice = sub_array.slice_copy(MArrayCoordinate(0, 0), MArrayCoordinate(height, int(w / 2)), fix_sat=True)
-            left_mask = (left_slice.grid_array[:, :, 0] >= 1) & (left_slice.grid_array[:, :, 0] < 77)
-            left_slice.grid_array[-1, :, 0][left_mask[-1, :]] = 0
-            left_slice = self.clean_subarray(left_slice)
+            print("vertical split")
+            mines = 0
+            c = 0
+            for c in range(number_unrevealed):
+                mines += col_sums[c]
+                if mines >= number_unrevealed // 2:
+                    break
 
-            right_slice = sub_array.slice_copy(MArrayCoordinate(0, int(w / 2)), MArrayCoordinate(height, width), fix_sat=True)
-            right_mask = (right_slice.grid_array[:, :, 0] >= 1) & (right_slice.grid_array[:, :, 0] < 77)
-            right_slice.grid_array[0, :, 0][right_mask[0, :]] = 0
-            right_slice = self.clean_subarray(right_slice)
+            left = sub_array.slice_copy(MArrayCoordinate(0, 0), MArrayCoordinate(height, c), fix_sat=True)
+            left_mask = (left.grid_array[:, :, 0] >= 1) & (left.grid_array[:, :, 0] < 77)
+            left.grid_array[:, -1, 0][left_mask[:, -1]] = 0
+            left = self.clean_subarray(left)
 
-            subset_list.append((MArrayCoordinate(0, 0), left_slice))
-            subset_list.append((MArrayCoordinate(0, int(width / 2)), right_slice))
+            right = sub_array.slice_copy(MArrayCoordinate(0, c), MArrayCoordinate(height, width), fix_sat=True)
+            right_mask = (right.grid_array[:, :, 0] >= 1) & (right.grid_array[:, :, 0] < 77)
+            right.grid_array[:, 0, 0][right_mask[:, 0]] = 0
+            right = self.clean_subarray(right)
 
-        return subset_list  # returns offset (for each) from original subset and the split subsets.
+            subset_list.append([MArrayCoordinate(0, 0), left])
+            subset_list.append([MArrayCoordinate(0, c), right])
+
+        return_list = []
+        for loc, splitted in subset_list:
+            splitted_unrev = (splitted.grid_array[:, :, 0] == 77)
+            splitted__num_unrev = np.count_nonzero(splitted_unrev)
+            if splitted__num_unrev > 15:
+                print(f"Split subarray of: {splitted__num_unrev} again")
+                split_list = self.split_subarray(splitted)
+                for i in range(len(split_list)):
+                    split_list[i][0] += loc
+                    return_list.append(split_list[i])
+            else:
+                return_list.append([loc, splitted])
+
+        return return_list  # returns offset (for each) from original subset and the split subsets.
+
 
     @staticmethod
-    def brute_force_method(subarray):  # TODO: ALLOW MULTIPLE RETURNS FROM ONE BRUTE FORCE.
+    def brute_force_method(subarray):
         # Handles a subarray of the grid. Generates all 2^n, n= # unrevealed tiles possible mine layouts.
         # Validate each layout to determine which ones are possible
         # Find proportion of valid layouts with a mine for each square.
@@ -426,17 +453,21 @@ class MLogicPlugin:
         # set numeric tiles on the edges to 0. and mines not touching any numerics to 0
         # 'CLEAN GRID"
 
+        s = time.process_time()
+
         valid_combinations = []
         h, w, d = subarray.shape
         subarray_proxy = subarray.copy()
 
         number_unrevealed = np.count_nonzero(subarray.grid_array[:, :, 0] == 77)
         unrevealed_locations = np.asarray(subarray.grid_array[:, :, 0] == 77).nonzero()
-        print(f"Simulating all {2 ** number_unrevealed} outcomes")
-        combinations_list = list(product((0, 1), repeat=number_unrevealed))  # list of all 2^n combinations. list of sets of values
+        print(f"Simulating all {2 ** number_unrevealed} outcomes ({number_unrevealed} tiles)")
+        combinations_list = list(
+            product((0, 1), repeat=number_unrevealed))  # list of all 2^n combinations. list of sets of values
+
         for combination in combinations_list:
 
-            combination_grid = subarray.grid_array[:, :, 0].copy()  # THIS IS BAD, PROBABLY WILL HAVE TO RECURSION
+            combination_grid = subarray.grid_array[:, :, 0].copy()
             for i, tile in enumerate(combination):
                 if tile:
                     combination_grid[unrevealed_locations[0][i], unrevealed_locations[1][i]] = 99
@@ -444,12 +475,9 @@ class MLogicPlugin:
             subarray_proxy.update(combination_grid)
             # accept if every nonzero numeric is exactly satisfied.
             # equivalent: reject if any nonzero numeric are NOT satisfied
-            nonzero = subarray_proxy.grid_array[:, :, 0] > 0
-            nonflag = subarray_proxy.grid_array[:, :, 0] < 77
-            nonzero_numeric = np.logical_and(nonzero, nonflag)
-            DEBUG1 = subarray_proxy.grid_array[:, :, 0]
-            DEBUG2 = subarray_proxy.grid_array[:, :, 1]
-            DEBUG3 = subarray_proxy.grid_array[:, :, 0] - subarray_proxy.grid_array[:, :, 1]
+
+            nonzero_numeric = np.logical_and(subarray_proxy.grid_array[:, :, 0] > 0,
+                                             subarray_proxy.grid_array[:, :, 0] < 77)
 
             not_satisfied = subarray_proxy.grid_array[:, :, 0] != subarray_proxy.grid_array[:, :, 1]
 
@@ -459,7 +487,7 @@ class MLogicPlugin:
 
         valid_combination_array = np.asarray(valid_combinations)
         column_sums = valid_combination_array.sum(axis=0)
-        column_proportions = column_sums/len(valid_combination_array)
+        column_proportions = column_sums / len(valid_combination_array)
 
         one_locs = np.argwhere(column_proportions == 1)
         zero_locs = np.argwhere(column_proportions == 0)
@@ -467,13 +495,115 @@ class MLogicPlugin:
 
         for loc in one_locs:
             location = MArrayCoordinate(unrevealed_locations[0][loc[0]],
-                                   unrevealed_locations[1][loc[0]])  # THIS MAY BE WRONG NOW
+                                        unrevealed_locations[1][loc[0]])
             return_locs.append((location, 1, 'right'))
 
         for loc in zero_locs:
             location = MArrayCoordinate(unrevealed_locations[0][loc[0]],
-                                   unrevealed_locations[1][loc[0]])  # THIS MAY BE WRONG NOW
+                                        unrevealed_locations[1][loc[0]])
             return_locs.append((location, 1, 'left'))
+
+        e = time.process_time()
+        print(f"TIME: {e-s}")
+        if return_locs:
+            return return_locs
+
+        max_value = np.max(column_proportions)
+        max_value_position = np.argmax(column_proportions)
+
+        min_value = np.min(column_proportions)
+        min_value_position = np.argmin(column_proportions)
+
+        if np.isnan(min_value) or np.isnan(max_value):
+            print("WHY IS PROB NAN!?!?")
+
+        location = MArrayCoordinate(unrevealed_locations[0][min_value_position],
+                                    unrevealed_locations[1][min_value_position])
+        print(f"PROB: {1 - min_value}")
+        return [(location, 1 - min_value, 'left')]
+
+    def backtrack_dfs(self, og_array, subarray,
+                      used_combinations,
+                      valid_combinations,
+                      location_coord_map,
+                      location_index):
+
+        location_string = "".join(map(str, location_index))
+        if location_string in used_combinations:
+            return
+        used_combinations.add(location_string)
+
+        combination_grid = og_array.grid_array[:, :, 0].copy()
+        for i in range(len(location_index)):
+            if location_index[i] == 1:
+                combination_grid[location_coord_map[i].values()] = 99
+
+        subarray.update(combination_grid)
+        # accept if every nonzero numeric is exactly satisfied.
+        # equivalent: reject if any nonzero numeric are NOT satisfied
+        nonzero_numeric = np.logical_and(subarray.grid_array[:, :, 0] > 0, subarray.grid_array[:, :, 0] < 77)
+
+        satisfaction = subarray.grid_array[:, :, 0] - subarray.grid_array[:, :, 1]
+
+        undersat = np.logical_and(nonzero_numeric, satisfaction > 0)
+        if undersat.any():
+            for i in range(len(location_index)):
+                if location_index[i] == 0:
+                    n_index = location_index.copy()
+                    n_index[i] = 1
+                    self.backtrack_dfs(og_array, subarray,
+                                       used_combinations,
+                                       valid_combinations,
+                                       location_coord_map,
+                                       n_index)
+            return
+
+        oversat = np.logical_and(nonzero_numeric, satisfaction < 0)
+        if oversat.any():
+            return
+
+        valid_combinations.append(location_string)
+        return
+
+    def backtracking_method(self, subarray):
+
+        s = time.process_time()
+        valid_combinations = []
+        h, w, d = subarray.shape
+        subarray_proxy = subarray.copy()
+
+        number_unrevealed = np.count_nonzero(subarray.grid_array[:, :, 0] == 77)
+        unrevealed_locations = np.asarray(subarray.grid_array[:, :, 0] == 77).nonzero()
+        print(f"Backtracking on: {number_unrevealed} tiles")
+        location_index = [0] * number_unrevealed
+        location_coord_map = {}
+        for i in range(number_unrevealed):
+            location_coord_map[i] = MArrayCoordinate(unrevealed_locations[0][i], unrevealed_locations[1][i])
+
+        used_combinations = set()
+
+        self.backtrack_dfs(subarray, subarray_proxy, used_combinations, valid_combinations, location_coord_map, location_index)
+
+        comb_array = np.array([[[int(x)] for x in y] for y in valid_combinations])
+        #valid_combination_array = np.asarray(comb_array)
+        column_sums = comb_array.sum(axis=0)
+        column_proportions = column_sums / len(comb_array)
+
+        one_locs = np.argwhere(column_proportions == 1)
+        zero_locs = np.argwhere(column_proportions == 0)
+        return_locs = []
+
+        for loc in one_locs:
+            location = location_coord_map[loc[0]]
+            return_locs.append((location, 1, 'right'))
+
+        for loc in zero_locs:
+            location = location_coord_map[loc[0]]
+
+            return_locs.append((location, 1, 'left'))
+
+        e = time.process_time()
+        print(f"TIME: {e-s}")
 
         if return_locs:
             return return_locs
@@ -488,6 +618,7 @@ class MLogicPlugin:
             print("WHY IS PROB NAN!?!?")
 
         location = MArrayCoordinate(unrevealed_locations[0][min_value_position],
-                               unrevealed_locations[1][min_value_position])
-        print(f"PROB: {1-min_value}")
-        return [(location, 1-min_value, 'left')]
+                                    unrevealed_locations[1][min_value_position])
+        print(f"PROB: {1 - min_value}")
+        return [(location, 1 - min_value, 'left')]
+
