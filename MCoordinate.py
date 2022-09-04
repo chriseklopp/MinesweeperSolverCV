@@ -1,9 +1,19 @@
 """
-MCoordinate is a container for coordinates. NO FRAME OF REFERENCE GUARANTEED
+MCoordinate is a container for X/Y coordinates.
 Can be added or subtracted to/from other objects of the same time
 Cuts down on the amount of nested indexing required
 MCoordinate knows no distinction between pixel coordinates, and array coordinates. So it is up to the user to ensure
 they don't mix them together.
+
+
+
+x ----------->
+y
+|
+|
+|
+V
+
 """
 
 import numpy as np
@@ -27,3 +37,4 @@ class MCoordinate:
 
     def values(self):
         return self.x, self.y
+
