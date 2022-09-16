@@ -10,6 +10,8 @@ import MLogicPlugin_Debug
 import math
 import time
 import pyautogui
+import datetime
+import os
 from MCoordinate import MCoordinate
 from MArrayCoordinate import MArrayCoordinate
 from MLogicPlugin import MLogicPlugin
@@ -17,6 +19,8 @@ import time
 import win32api
 import win32con
 from MTileArray import MTileArray
+
+# TODO: Add the crop locations instead of cropping twice, should be more optimal this way.
 
 
 class MInstance:
@@ -38,7 +42,10 @@ class MInstance:
 
     def __init__(self, location_tuple):
         # locations (low,high)
-        self.my_window_location, self.my_grid_location, self.tile_length = location_tuple
+        self.my_window_location, self.my_grid_location, self.tile_length,\
+            self.my_time_location, self.my_mines_remaining_location,\
+            self.mines_time_svm = location_tuple
+
         self.grid_array = MTileArray((16, 30))
         self.debugarray = self.grid_array.grid_array[:, :, 0].transpose()  # DEBUG PURPOSES
         self.flags = 0
@@ -58,8 +65,14 @@ class MInstance:
         # 4) Cursor action
 
         start = cv2.getTickCount()
+        mines_remaining = self._detect_mines_remaining(screen_snapshot)
+        game_time = self._detect_game_time(screen_snapshot)
 
         if self._detect_window_popup(screen_snapshot):
+            if mines_remaining == 0:  # TODO: Placeholder
+                print("YOU WON!!")
+            else:
+                print("YOU LOSE!!")
             self.is_complete = True
             return
         self.update_array(screen_snapshot)  # DEBUG: OLD METHOD ~.32 SEC
@@ -296,6 +309,93 @@ class MInstance:
 
         return False
 
+    def _detect_mines_remaining(self, screen_snapshot):
+        # Detect digits, use our trained model to classify them.
+
+        lower_window_coords, upper_window_coords = self.my_window_location
+        window = screen_snapshot[lower_window_coords.y:upper_window_coords.y,
+                                 lower_window_coords.x:upper_window_coords.x]
+
+        lower_mine_coords, upper_mine_coords = self.my_mines_remaining_location
+        mine_widget = window[lower_mine_coords.y:upper_mine_coords.y,
+                             lower_mine_coords.x:upper_mine_coords.x]
+
+        imgHSV = cv2.cvtColor(mine_widget, cv2.COLOR_BGR2HSV)
+        bw_mask = cv2.inRange(imgHSV, np.array([0, 0, 199]), np.array([179, 254, 255]))
+
+        contours, hierarchy = cv2.findContours(bw_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        detected_digits = []  # type: list(tuple(image, x_location))
+        for cont in contours:
+            area = cv2.contourArea(cont)
+
+            if 25 < area < 500:
+                [x, y, w, h] = cv2.boundingRect(cont)
+                digit_crop = bw_mask[y:y + h, x:x + w]
+                digit_crop_normalized = cv2.resize(digit_crop, (10, 10))
+                detected_digits.append((digit_crop_normalized, x))
+
+                # # SAVE AND CREATE TRAINING DATA.
+                # im_path = os.path.join(os.getcwd(),r"training\digits")
+                # im_path = os.path.join(im_path, str(datetime.datetime.now().timestamp()))
+                # im_path += ".png"
+                # # print(im_path)
+                # cv2.imwrite(im_path, digit_crop_normalized)
+
+        mines = ""
+        detected_digits.sort(key=lambda tup: tup[1])
+        for digit in detected_digits:
+            predicted = self.mines_time_svm.predict(digit[0].flatten().reshape(1, -1))
+            mines += str(predicted[0])
+        if not mines:
+            print("ERROR: Mine counter failed to resolve properly!!")
+            return 99  # As far as I can tell should be an unproblematic default value. It shouldnt really happen anyway
+        return int(mines)
+
+    def _detect_game_time(self, screen_snapshot):
+        # Detect digits, use our trained model to classify them.
+
+        lower_window_coords, upper_window_coords = self.my_window_location
+        window = screen_snapshot[lower_window_coords.y:upper_window_coords.y,
+                 lower_window_coords.x:upper_window_coords.x]
+
+        lower_mine_coords, upper_mine_coords = self.my_time_location
+        mine_widget = window[lower_mine_coords.y:upper_mine_coords.y,
+                      lower_mine_coords.x:upper_mine_coords.x]
+
+        imgHSV = cv2.cvtColor(mine_widget, cv2.COLOR_BGR2HSV)
+        bw_mask = cv2.inRange(imgHSV, np.array([0, 0, 199]), np.array([179, 254, 255]))
+
+        contours, hierarchy = cv2.findContours(bw_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        detected_digits = []  # type: list(tuple(image, x_location))
+        for cont in contours:
+            area = cv2.contourArea(cont)
+
+            if 25 < area < 500:
+                [x, y, w, h] = cv2.boundingRect(cont)
+                digit_crop = bw_mask[y:y + h, x:x + w]
+                digit_crop_normalized = cv2.resize(digit_crop, (10, 10))
+                detected_digits.append((digit_crop_normalized, x))
+
+                # # SAVE AND CREATE TRAINING DATA.
+                # im_path = os.path.join(os.getcwd(),r"training\digits")
+                # im_path = os.path.join(im_path, str(datetime.datetime.now().timestamp()))
+                # im_path += ".png"
+                # # print(im_path)
+                # cv2.imwrite(im_path, digit_crop_normalized)
+
+        time_remaining = ""
+        detected_digits.sort(key=lambda tup: tup[1])
+        for digit in detected_digits:
+            predicted = self.mines_time_svm.predict(digit[0].flatten().reshape(1, -1))
+            time_remaining += str(predicted[0])
+        if not time_remaining:
+            print("ERROR: Time counter failed to resolve properly!!")
+            return 0  # As far as I can tell should be an unproblematic default value. It shouldnt really happen anyway
+        print(time_remaining)
+        return int(time_remaining)
+
     @staticmethod
     def _detect_symmetry(tile_of_interest, is_vertical):
 
@@ -343,3 +443,4 @@ class MInstance:
             # cv2.imshow("tile_righthalf", tile_righthalf)
             # cv2.waitKey(0)
             return left_right_symmetry
+
