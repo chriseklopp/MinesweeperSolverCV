@@ -1,12 +1,20 @@
 
 
 from enum import Enum
+import numpy as np
 
 
 class ActionTypes(Enum):
     SOLVE = 1
     RESET = 2
     END = 3
+
+
+class MAction:
+    def __init__(self, atype: ActionTypes, instid: int, data: list):
+        self.atype = atype
+        self.instance_id = instid
+        self.data = data
 
 
 """
@@ -26,8 +34,6 @@ y
 V
 
 """
-
-import numpy as np
 
 
 class MCoordinate:
@@ -50,7 +56,6 @@ class MCoordinate:
         return self.x, self.y
 
 
-
 """
 MArrayCoordinate is a container for i/j array coordinates
 Can be added or subtracted to/from other objects of the same time
@@ -71,6 +76,7 @@ V
 """
 
 # For some reason numpy index [j,i,k] so we have to do it like that
+
 
 class MArrayCoordinate:
 

@@ -11,38 +11,29 @@ Record Starting Position
 
 import cv2
 import numpy as np
-import random
-import matplotlib
 import pyautogui
 import time
-import cProfile
-
+from multiprocessing import shared_memory
 
 import MInstanceManager
 
 
-def main():
+def main(memory_block):
     time.sleep(3)
 
     print("MineSweeper Bot V-0.5")
 
-    manager = MInstanceManager.MInstanceManager()
+    manager = MInstanceManager.MInstanceManager(memory_block)
 
     print("Initialized Instances")
-    print(len(manager.instances), " Game Instances Detected")
+    print(manager.instance_count, " Game Instances Detected")
 
-    for i in range(0, 5000):
-        my_screenshot = pyautogui.screenshot()  # takes and saves screenshot
-        # my_screenshot.save("images\sc.png")
-        # manager.screenshot = cv2.imread("images\sc.png")  # debug, display basic screenshot
-        image = cv2.cvtColor(np.array(my_screenshot), cv2.COLOR_RGB2BGR)
-        manager.screenshot = image
-        manager.update_all()
-        print("frame: ", manager.frame_number)
-        print("-------------------------")
-        print()
+    manager.run(60)
 
 
 if __name__ == "__main__":
-    # cProfile.run(main())
-    main()
+    my_screenshot = pyautogui.screenshot()  # takes and saves screenshot
+    screenshot_array = cv2.cvtColor(np.array(my_screenshot), cv2.COLOR_RGB2BGR)
+    memory_share = shared_memory.SharedMemory(create=True, size=screenshot_array.nbytes, name="ms_mem_share")
+    main(memory_share)
+
