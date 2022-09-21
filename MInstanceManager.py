@@ -110,10 +110,10 @@ class MInstanceManager:
             print("EXITING: No active instances")
             return
         while True:  # TODO: While number of active instances > 0.
-            print(f"FRAME: {frame}")
+            # print(f"FRAME: {frame}")
             self.frame_number += 1
             actions_consumed = 0
-            time.sleep(.02)
+            time.sleep(.01)
             # Lock queue to prevent any more instances from joining the wait for a screenshot.
             self.queue_unlocked.clear()
 
@@ -128,7 +128,6 @@ class MInstanceManager:
             while not self.instance_action_queue.empty():
                 # Each item in queue is MAction
                 action = self.instance_action_queue.get()
-                print("CONSUME")
                 if previous_id != action.instance_id:
                     # Set necessary window to active on windows, otherwise our action clicks will not go through.
                     time.sleep(.01)
@@ -148,7 +147,8 @@ class MInstanceManager:
                 else:
                     print("Unsupported Action Received.")
             # Make and publish screenshot
-            win32api.SetCursorPos((0, 0))  # Return cursor to edge of screen so it doesn't get in the way.
+            if actions_consumed:
+                win32api.SetCursorPos((0, 0))  # Return cursor to edge of screen so it doesn't get in the way.
 
             my_screenshot = pyautogui.screenshot()  # takes and saves screenshot
             screenshot_array = cv2.cvtColor(np.array(my_screenshot), cv2.COLOR_RGB2BGR)
@@ -318,7 +318,7 @@ class MInstanceManager:
         for box in detected_boxes:
             lower_mine_loc_coords = MCoordinate(box[0][0][0] + 1,
                                                 box[0][0][1] + vertical_offset)  # +1 is for a line detection correction
-            upper_mine_loc_coords = MCoordinate(box[1][0][0], box[1][0][1] + vertical_offset + 1)
+            upper_mine_loc_coords = MCoordinate(box[1][0][0]+5, box[1][0][1] + vertical_offset + 5)
             ret_locations.append((lower_mine_loc_coords, upper_mine_loc_coords))
 
         if len(ret_locations) != 2:
