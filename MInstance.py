@@ -6,19 +6,19 @@ contains information about a single game of minesweeper on the screen
 """
 import cv2
 import numpy as np
-import MLogicPlugin_Debug
-import math
-import time
-import pyautogui
+
 import datetime
 import os
-from MCoordinate import MCoordinate
-from MArrayCoordinate import MArrayCoordinate
+from MDataTypes import ActionTypes
+from MDataTypes import MCoordinate
+
+from MDataTypes import MAction
 from MLogicPlugin import MLogicPlugin
 import time
 import win32api
 import win32con
 from MTileArray import MTileArray
+from multiprocessing import shared_memory
 
 # TODO: Add the crop locations instead of cropping twice, should be more optimal this way.
 
@@ -37,104 +37,116 @@ class MInstance:
                            '7': ([0, 101, 144], [37, 255, 202], [0, 0]),
                            '99': ([0, 77, 188], [59, 255, 255], [0, 0])  # FLAG DETECTION SOMETIMES FAILING
                            }
-    # feature_definitions = {'1':  ([85, 66, 130], [117, 255, 255], [0, 0])}
-    id = 0
 
-    def __init__(self, location_tuple):
+    # feature_definitions = {'1':  ([85, 66, 130], [117, 255, 255], [0, 0])}
+
+    def __init__(self, instance_id,
+                 location_tuple,
+                 screenshot_shape,
+                 instance_action_queue,  # Queue shared btwn processes
+                 screenshot_published,  # Shared event
+                 queue_unlocked,  # Shared event
+                 sync_lock  # Shared event
+                 ):
+
+        self.SCREENSHOT_DIMENSIONS = screenshot_shape
+
+        # SET SHARED PROCESS OBJECTS
+        self.screenshot_memory = shared_memory.SharedMemory(name="ms_mem_share")  # Init access to our shared memory block.
+
+        # Recreate the screenshot from the shared memory and save for use.
+        self.screenshot = np.ndarray(screenshot_shape, dtype=np.uint8, buffer=self.screenshot_memory.buf)
+
+        self.instance_action_queue = instance_action_queue
+        self.screenshot_published = screenshot_published
+        self.queue_unlocked = queue_unlocked
+        self.sync_lock = sync_lock
+
+        # SET GAME INSTANCE VARIABLES
         # locations (low,high)
-        self.my_window_location, self.my_grid_location, self.tile_length,\
-            self.my_time_location, self.my_mines_remaining_location,\
-            self.mines_time_svm = location_tuple
+        self.my_window_location, self.my_grid_location, self.tile_length, \
+        self.my_time_location, self.my_mines_remaining_location, \
+        self.mines_time_svm = location_tuple
 
         self.grid_array = MTileArray((16, 30))
         self.debugarray = self.grid_array.grid_array[:, :, 0].transpose()  # DEBUG PURPOSES
         self.flags = 0
         self.is_complete = False
         self.my_logic_plugin = MLogicPlugin(self.grid_array)
-        self.id = MInstance.id
-        MInstance.id += 1
+        self.id = instance_id
+
+        # Begin the instance loop
+        self.run()
+
+    def run(self):
+        # This is where interfacing between this process and the main process (MInstanceManager) will take place.
+        while True:
+            # TODO: Add Condition to kill process when necessary.
+
+            # Wait for screenshot published event to continue
+            self.screenshot_published.wait()
+
+            # Now update our screenshot with the newly published one from shared_memory
+            self.screenshot = np.ndarray(self.SCREENSHOT_DIMENSIONS, dtype=np.uint8, buffer=self.screenshot_memory.buf)
+
+            # Update our mines_remaining and game time elapsed counters
+            mines_remaining = self._detect_mines_remaining(self.screenshot)
+            game_time = self._detect_game_time(self.screenshot)
+
+            # Check for a window popup (indicating win or loss)
+            if self._detect_window_popup(self.screenshot):
+                status = ""
+                if mines_remaining == 0:
+                    status = "Win"
+                    print("YOU WON!!")
+                else:
+                    print("YOU LOSE!!")
+                    status = "Loss"
+                time.sleep(5)
+                #     self.grid_array = MTileArray((16, 30))  # this definitely shouldnt be hardcoded.
+                #     self.flags = 0
+                #     self.is_complete = False
+                #
+                action = MAction(ActionTypes.RESET, self.id, [status])
+
+            else:
+
+                results = self.update(self.screenshot)  # Update with the latest screenshot from MInstanceManager
+                action = MAction(ActionTypes.SOLVE, self.id, results)
+
+            # Wait if entry to queue is locked.
+            self.queue_unlocked.wait()
+
+            self.instance_action_queue.put(action)  # Put action in the shared queue
+
+            # Wait if sync lock is closed
+            self.sync_lock.wait()
 
     def get_id(self):
         print(self.id)
 
     def update(self, screen_snapshot):
         # 1) Receives screen snapshot
-        # 2) Checks for game end popup
         # 2) Updates own array
         # 3) Uses logic plugin
-        # 4) Cursor action
 
-        start = cv2.getTickCount()
-        mines_remaining = self._detect_mines_remaining(screen_snapshot)
-        game_time = self._detect_game_time(screen_snapshot)
-
-        if self._detect_window_popup(screen_snapshot):
-            if mines_remaining == 0:  # TODO: Placeholder
-                print("YOU WON!!")
-            else:
-                print("YOU LOSE!!")
-            self.is_complete = True
-            return
         self.update_array(screen_snapshot)  # DEBUG: OLD METHOD ~.32 SEC
-
         self.debugarray = self.grid_array.grid_array[:, :, 0]  # DEBUG PURPOSES
-
         results = self.my_logic_plugin.update(self.grid_array)
-        for k in results:
-            self.cursor_control(k[0], k[1])
 
-        end = cv2.getTickCount()
-        total = (end - start) / cv2.getTickFrequency()
-        total
+        # Need to convert array coordinates to screen pixel coordinates.
+        pixel_location_return = []
+        for i in range(len(results)):
+            y_location, x_location = results[i][0].values()
+            cursor_offset_correction = MCoordinate(self.tile_length / 2, self.tile_length / 2)
+            lower_window_real_location = self.my_window_location[0]
+            lower_grid_real_location = lower_window_real_location + self.my_grid_location[0]
+            x_target = lower_grid_real_location.x + cursor_offset_correction.x + self.tile_length * x_location + 1
+            y_target = lower_grid_real_location.y + cursor_offset_correction.y + self.tile_length * y_location + 1
 
-        # self.cursor_control((5, 5), 'left')
+            pixel_location_return.append([MCoordinate(x_target, y_target), results[i][1]])
 
-    def reset(self):
-        np.savetxt('lastarray', self.grid_array.grid_array[:, :, 0], delimiter=',')
-        time.sleep(5)
-        self.grid_array = MTileArray((16, 30))  # this definitely shouldnt be hardcoded.
-        self.flags = 0
-        self.is_complete = False
-        self.cursor_control(MCoordinate(0, 0), 'left')  # ensures the correct window is selected
-        win32api.keybd_event(0x1B, 0, 0, 0)   # escape key
-        # pyautogui.press('escape')  # pressing escape while a window popup is active will start a new game.
-
-    def cursor_control(self, location: MArrayCoordinate, action='left'):  # tells cursor to perform action at specific array[x,y] location.
-        y_location, x_location = location.values()
-        cursor_offset_correction = MCoordinate(self.tile_length / 2, self.tile_length / 2)
-        lower_window_real_location = self.my_window_location[0]
-        lower_grid_real_location = lower_window_real_location + self.my_grid_location[0]
-        x_target = lower_grid_real_location.x + cursor_offset_correction.x + self.tile_length * x_location
-        y_target = lower_grid_real_location.y + cursor_offset_correction.y + self.tile_length * y_location
-        # print(f"CURSOR DEBUG: ACTION ={action}, LOCATION: {location.values()}")
-        win32api.SetCursorPos((x_target, y_target))
-        time.sleep(.01)
-
-        if action == 'left':
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x_target, y_target, 0, 0)
-            time.sleep(.005)
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x_target, y_target, 0, 0)
-
-        elif action == 'right':
-            win32api.mouse_event(win32con.MOUSEEVENTF_RIGHTDOWN, x_target, y_target, 0, 0)
-            time.sleep(.005)
-            win32api.mouse_event(win32con.MOUSEEVENTF_RIGHTUP, x_target, y_target, 0, 0)
-
-        elif action == 'double_left':
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x_target, y_target, 0, 0)
-            time.sleep(.01)
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x_target, y_target, 0, 0)
-            time.sleep(.01)
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x_target, y_target, 0, 0)
-            time.sleep(.01)
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x_target, y_target, 0, 0)
-
-        else:
-            print("---------------------------")
-            print("INVALID ACTION SPECIFIED")
-            print("---------------------------")
-        time.sleep(.01)
-        win32api.SetCursorPos((0, 0))
+        return pixel_location_return
 
     def update_array(self, screen_snapshot):
         new_array = np.zeros((16, 30))
@@ -154,15 +166,8 @@ class MInstance:
         resized_hsv = cv2.cvtColor(resized, cv2.COLOR_BGR2HSV)
         tt = resized.shape
 
-        tile_height = round(new_height/16)
-        tile_width = round(new_width/30)
-        # tile_width = round(grid_width / 30)
-        # tile_height = round(grid_height / 16)
-        # tile_length = max(tile_height, tile_width)  # ensuring h and w are equal prevents drift from occuring
-
-        # cv2.imshow("resized", resized)
-        # cv2.imshow("gridcop", grid_crop)
-        # cv2.waitKey(0)
+        tile_height = round(new_height / 16)
+        tile_width = round(new_width / 30)
 
         # create feature masks for whole grid that can be sliced to the individual tiles
         feature_masks = {}
@@ -192,8 +197,8 @@ class MInstance:
         for row in range(0, 16):
             tile_list = []
             for column in range(0, 30):
-                x_target = tile_width * (row+1)
-                y_target = tile_height * (column+1)
+                x_target = tile_width * (row + 1)
+                y_target = tile_height * (column + 1)
                 # cv2.imshow("tile", tile_crop)
                 # cv2.waitKey(0)
                 match = False
@@ -208,36 +213,31 @@ class MInstance:
                 if not match:
                     # detecting 0 tiles requires an alternative method since contour detection fucks shit up fam.
                     tile_bw = grid_bw_empty_tile[row * tile_width:x_target, column * tile_height:y_target]
-                    # tile_hsv = cv2.cvtColor(tile_crop, cv2.COLOR_BGR2HSV)
-                    # lower = np.array([58, 0, 0])
-                    # upper = np.array([177, 62, 255])
-                    # mask = cv2.inRange(tile_hsv, lower, upper)
-                    # tile_blur = cv2.GaussianBlur(mask, (13, 13), 0)  # blur
-                    # tile_bw = cv2.threshold(tile_blur, 50, 255, cv2.THRESH_BINARY)[1]
                     tile_mean = tile_bw.mean()
-                    if tile_mean/255 > .95:
+                    if tile_mean / 255 > .95:
                         new_array[row, column] = int(0)
                     else:
                         new_array[row, column] = 77
         self.grid_array.update(new_array)
 
-    def _detect_window_popup(self, screen_snapshot):  # this would occur on a won or lost game. Must differentiate between win / lose
+    def _detect_window_popup(self,
+                             screen_snapshot):  # this would occur on a won or lost game.
         lower_window_coords, upper_window_coords = self.my_window_location
         lower_grid_coords, upper_grid_coords = self.my_grid_location
         window = screen_snapshot[lower_window_coords.y:upper_window_coords.y,
-                                 lower_window_coords.x:upper_window_coords.x]
+                 lower_window_coords.x:upper_window_coords.x]
         grid_crop = window[lower_grid_coords.y:upper_grid_coords.y,
-                           lower_grid_coords.x:upper_grid_coords.x]
+                    lower_grid_coords.x:upper_grid_coords.x]
         grid_hsv = cv2.cvtColor(grid_crop, cv2.COLOR_BGR2HSV)
         lower = np.array([0, 0, 218])
         upper = np.array([179, 1, 255])
         grid_mask = cv2.inRange(grid_hsv, lower, upper)
-        grid_blur = cv2.GaussianBlur(grid_mask, (13, 13), 0)  # blur
+        grid_blur = cv2.GaussianBlur(grid_mask, (13, 13), 0)
         grid_bw = cv2.threshold(grid_blur, 50, 255, cv2.THRESH_BINARY)[1]
         contours, hierarchy = cv2.findContours(grid_bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         for cont in contours:
             area = cv2.contourArea(cont)
-            if (self.tile_length * 10)**2 > area > (self.tile_length * 3)**2:
+            if (self.tile_length * 10) ** 2 > area > (self.tile_length * 3) ** 2:
                 return True
         return False
 
@@ -262,9 +262,9 @@ class MInstance:
             peri = cv2.arcLength(cont, True)
             approx = cv2.approxPolyDP(cont, .05 * peri, True)
             # cv2.drawContours(tile_hsv, [approx], -1, (0, 255, 0), 3)
-            if (self.tile_length ** 2)/15 < area < (self.tile_length ** 2)/2:
+            if (self.tile_length ** 2) / 15 < area < (self.tile_length ** 2) / 2:
 
-            # if 10 < area:  # TEMPORARY DEBUG SWITCH BACK TO ORIGINAL
+                # if 10 < area:  # TEMPORARY DEBUG SWITCH BACK TO ORIGINAL
                 moment = cv2.moments(cont)
                 avg_x = int(moment["m10"] / moment["m00"])
                 avg_y = int(moment["m01"] / moment["m00"])
@@ -314,11 +314,11 @@ class MInstance:
 
         lower_window_coords, upper_window_coords = self.my_window_location
         window = screen_snapshot[lower_window_coords.y:upper_window_coords.y,
-                                 lower_window_coords.x:upper_window_coords.x]
+                 lower_window_coords.x:upper_window_coords.x]
 
         lower_mine_coords, upper_mine_coords = self.my_mines_remaining_location
         mine_widget = window[lower_mine_coords.y:upper_mine_coords.y,
-                             lower_mine_coords.x:upper_mine_coords.x]
+                      lower_mine_coords.x:upper_mine_coords.x]
 
         imgHSV = cv2.cvtColor(mine_widget, cv2.COLOR_BGR2HSV)
         bw_mask = cv2.inRange(imgHSV, np.array([0, 0, 199]), np.array([179, 254, 255]))
@@ -329,7 +329,7 @@ class MInstance:
         for cont in contours:
             area = cv2.contourArea(cont)
 
-            if 25 < area < 500:
+            if 20 < area < 500:
                 [x, y, w, h] = cv2.boundingRect(cont)
                 digit_crop = bw_mask[y:y + h, x:x + w]
                 digit_crop_normalized = cv2.resize(digit_crop, (10, 10))
@@ -372,7 +372,7 @@ class MInstance:
         for cont in contours:
             area = cv2.contourArea(cont)
 
-            if 25 < area < 500:
+            if 20 < area < 500:
                 [x, y, w, h] = cv2.boundingRect(cont)
                 digit_crop = bw_mask[y:y + h, x:x + w]
                 digit_crop_normalized = cv2.resize(digit_crop, (10, 10))
@@ -424,7 +424,6 @@ class MInstance:
             top_bottom_symmetry = cv2.countNonZero(top_bottom_intersection) / \
                                   cv2.countNonZero(top_bottom_union)
 
-
             # cv2.imshow("tile_upperhalf_flipped", tile_upperhalf_flipped)
             # cv2.imshow("tile_lowerhalf", tile_lowerhalf)
             # cv2.waitKey(0)
@@ -443,4 +442,3 @@ class MInstance:
             # cv2.imshow("tile_righthalf", tile_righthalf)
             # cv2.waitKey(0)
             return left_right_symmetry
-

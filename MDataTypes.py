@@ -1,3 +1,61 @@
+
+
+from enum import Enum
+import numpy as np
+
+
+class ActionTypes(Enum):
+    SOLVE = 1
+    RESET = 2
+    END = 3
+
+
+class MAction:
+    def __init__(self, atype: ActionTypes, instid: int, data: list):
+        self.atype = atype
+        self.instance_id = instid
+        self.data = data
+
+
+"""
+MCoordinate is a container for X/Y coordinates.
+Can be added or subtracted to/from other objects of the same time
+Cuts down on the amount of nested indexing required
+MCoordinate knows no distinction between pixel coordinates, and array coordinates. So it is up to the user to ensure
+they don't mix them together.
+
+
+
+x ----------->
+y
+|
+|
+|
+V
+
+"""
+
+
+class MCoordinate:
+
+    def __init__(self, x, y):
+        self.x = np.intc(x)
+        self.y = np.intc(y)
+
+    def __add__(self, other):
+        x = self.x + other.x
+        y = self.y + other.y
+        return MCoordinate(x, y)
+
+    def __sub__(self, other):
+        x = self.x - other.x
+        y = self.y - other.y
+        return MCoordinate(x, y)
+
+    def values(self):
+        return self.x, self.y
+
+
 """
 MArrayCoordinate is a container for i/j array coordinates
 Can be added or subtracted to/from other objects of the same time
@@ -18,9 +76,6 @@ V
 """
 
 # For some reason numpy index [j,i,k] so we have to do it like that
-
-# is it actually [i,j,k] ?????
-import numpy as np
 
 
 class MArrayCoordinate:

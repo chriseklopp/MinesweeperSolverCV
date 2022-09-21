@@ -20,12 +20,13 @@ and Enumerate section and run Simulation on area. Make a probabilistic mine sele
 (marked EXIT, allow potentially escaping the recursive loop and return an action)
 """
 
-import random
+
 import time
-import copy
+
 import numpy as np
-from MArrayCoordinate import MArrayCoordinate
-import cv2
+
+from MDataTypes import MArrayCoordinate
+
 from itertools import product
 from MTileArray import MTileArray
 
@@ -87,7 +88,7 @@ class MLogicPlugin:
                 if tile_info[0] == 77:
                     print(focus, "RULE2 RETURN")
                     self.previous_focus = focus
-                    return [(focus, 'double_left')]  # TODO: IS THIS RIGHT???
+                    return [(focus, 'double_left')]
 
                     # print(location.values(), "RULE2 RETURN")
                     # self.previous_focus = focus
